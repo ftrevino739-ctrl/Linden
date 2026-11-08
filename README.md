@@ -1,42 +1,32 @@
 # Linden
 
-Linden is an experimental Chromium-based desktop browser with a quiet, Liquid Glass-inspired interface and an optional AI companion.
+Linden is a calm, Liquid Glass-inspired browser project built on **Mozilla Firefox / Gecko**. The product direction is deliberately no-AI: a fast browser with a gold droplet identity, a clean search/start page and a useful live news feed.
 
-## First milestone
-- Real browser tabs powered by Electron `WebContentsView`.
-- Address/search bar, back, forward, reload, home and popup-to-new-tab handling.
-- Minimal glass UI with an AI side panel.
-- OpenAI-compatible chat endpoint configuration.
-- Optional page context: page text is only read when the context toggle is enabled and the user sends a chat request.
-- API keys encrypted locally with Electron `safeStorage`.
-- React + TypeScript + Vite renderer, isolated Electron main/preload.
+## Current development direction
 
-## Requirements
-Node.js 20.19+ or 22.12+, npm, and a Windows/macOS/Linux desktop.
+The original Electron/Chromium prototype is no longer the product architecture. The active foundation is in [firefox/](firefox/README.md):
 
-## Continuous integration\nGitHub Actions builds Windows, macOS and Linux packages on pushes to the application source.\n\n## Run
-```bash
-npm install
-npm run dev
-```
+- Real Firefox Desktop engine (Gecko + SpiderMonkey), not Chromium.
+- A minimal start page with page title, search field and current headlines.
+- News categories: current affairs, sports, finance/business, entertainment and technology.
+- Muted champagne-gold droplet mark.
+- Restrained translucent surfaces, graphite text and warm neutrals; no neon palette.
+- No AI features, AI services or AI API keys.
 
-## Package
-```bash
-npm run dist
-```
-Installers are written to `release/`. Build on each target operating system for reliable native packages.
+## Project status
 
-## Configure AI
-Open Linden AI settings and provide a base URL (for example `https://api.openai.com/v1`), model ID, and API key. Compatible providers exposing `/chat/completions` can be used. Keys are stored outside the repository using OS-backed Electron encryption when available.
+The firefox-gecko-foundation branch contains the first Firefox customization layer: a new-tab WebExtension, RSS news cards, optional userChrome styling, distribution defaults and the Linden droplet SVG.
 
-## Security and status
-This is an early, runnable foundation—not a hardened production browser. App chrome uses context isolation, no Node integration, sandboxing, and a narrow preload bridge. Website content runs in separate WebContentsViews without the privileged preload. Before public distribution, add explicit permission prompts, download management, stricter popup/navigation policies, CSP, certificate/error UX, signed updates, automated tests and security review.
+This is an early foundation, not yet a standalone branded Firefox installer. The next major engineering milestone is a reproducible Windows Firefox build/repackaging pipeline using Mozilla's source and build system. The existing root Electron files are retained temporarily as prototype history and are not the target architecture.
 
-## Roadmap
-1. Permission controls, downloads, private windows and session restore.
-2. Bookmarks, history, profiles, find-in-page and keyboard shortcuts.
-3. AI streaming, provider presets, model picker and page actions.
-4. Reader mode, translation, tab search and comparison.
-5. Signed release pipelines for Windows, macOS and Linux.
+## Start here
 
-License: not selected yet.
+See [Firefox foundation and setup instructions](firefox/README.md).
+
+## Official technical references
+
+- [Firefox Desktop architecture](https://firefox-source-docs.mozilla.org/browser/overview.html)
+- [Gecko engine](https://firefox-source-docs.mozilla.org/overview/gecko.html)
+- [Building Firefox on Windows](https://firefox-source-docs.mozilla.org/setup/windows_build.html)
+
+Linden is an independent project and is not an official Mozilla product.
