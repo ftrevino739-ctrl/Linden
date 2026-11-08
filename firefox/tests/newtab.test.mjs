@@ -22,13 +22,13 @@ test("Firefox WebExtension manifest is valid and overrides new tabs", () => {
 test("all local assets referenced by the start page exist", () => {
   for (const [, asset] of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     if (/^(https?:|data:|#)/i.test(asset)) continue;
-    assert.ok(fs.existsSync(path.join(base, asset)), `Missing local asset: ${asset}`);
+    assert.ok(fs.existsSync(path.join(base, asset)), "Missing local asset: " + asset);
   }
 });
 
 test("requested product content is present and unwanted tagline is absent", () => {
   for (const label of ["Deportes", "Finanzas", "Entretenimiento", "Tecnología", "Actualidad"]) {
-    assert.ok(html.includes(label), `Missing category: ${label}`);
+    assert.ok(html.includes(label), "Missing category: " + label);
   }
   assert.match(html, /id="query"/);
   assert.match(html, /Noticias más recientes/);
@@ -40,7 +40,7 @@ test("new-tab script parses and supports search, filters and RSS", () => {
   assert.match(js, /duckduckgo\.com/);
   assert.match(js, /Promise\.all\(feeds\.map\(loadFeed\)\)/);
   assert.match(js, /AbortController/);
-  assert.match(js, /selected===item\.category/);
+  assert.match(js, /item\.category===selected/);
   assert.match(js, /noopener noreferrer/);
 });
 
@@ -61,5 +61,5 @@ test("Firefox layer does not bundle a Chromium or Electron runtime", () => {
     path.join(root, "firefox", "build", "mozconfig.win")
   ];
   const source = files.map(file => fs.readFileSync(file, "utf8")).join("\n");
-  assert.doesNotMatch(source, /(?:from|require\\()\\s*['\"](?:electron|playwright|puppeteer)|webview2/i);
+  assert.doesNotMatch(source, /(?:from\s*['"](?:electron|playwright|puppeteer)|require\(['"](?:electron|playwright|puppeteer)|webview2)/i);
 });
