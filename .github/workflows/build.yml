@@ -1,0 +1,25 @@
+name: Build Linden
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["src/**","electron/**","package.json","tsconfig.json","vite.config.ts"]
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run build
+      - run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linden-${{ runner.os }}
+          path: release/*
