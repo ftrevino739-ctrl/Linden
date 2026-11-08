@@ -1,0 +1,7 @@
+# Linden Windows build configuration.
+# Copy this file to the root of a Mozilla source checkout as .mozconfig.
+# This intentionally builds the unbranded Firefox browser application.
+ac_add_options --enable-application=browser
+ac_add_options --disable-debug
+ac_add_options --enable-optimize
+ac_add_options --enable-release
