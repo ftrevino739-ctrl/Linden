@@ -1,0 +1,23 @@
+name: Linden Firefox foundation checks
+
+on:
+  push:
+    branches: [firefox-gecko-foundation]
+    paths:
+      - "firefox/**"
+      - ".github/workflows/firefox-foundation.yml"
+  pull_request:
+    paths:
+      - "firefox/**"
+      - ".github/workflows/firefox-foundation.yml"
+
+jobs:
+  validate-newtab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate Linden Firefox start page
+        run: node --test firefox/tests/*.test.mjs
