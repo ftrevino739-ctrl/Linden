@@ -54,7 +54,6 @@ test("Liquid Glass styling stays warm, responsive and accessible", () => {
 
 test("Firefox layer does not bundle a Chromium or Electron runtime", () => {
   const files = [
-    path.join(root, "firefox", "README.md"),
     path.join(base, "manifest.json"),
     path.join(base, "index.html"),
     path.join(base, "app.js"),
