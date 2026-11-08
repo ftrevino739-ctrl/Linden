@@ -1,14 +1,18 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Linden</title><link rel="icon" href="linden-drop.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"></head>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Linden</title><link rel="icon" href="linden-mark.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"></head>
 <body><main class="page">
 <section class="hero" aria-labelledby="welcome">
- <img class="hero-drop" src="linden-drop.svg" alt="Gota dorada Linden">
+ <img class="hero-mark" src="linden-mark.svg" alt="">
  <h1 id="welcome">Linden</h1>
  <form class="search" id="search-form" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg><input id="query" type="search" placeholder="Buscar en la web..." autocomplete="off" autofocus><button type="submit" aria-label="Buscar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 5l7 7-7 7"/></svg></button></form>
+ <div class="quick-actions"><button id="history-button" class="quiet-button" type="button">Historial</button><button id="ai-button" class="quiet-button ai-button" type="button">Linden AI</button></div>
 </section>
 <section class="news" aria-labelledby="news-title">
- <nav class="filters" aria-label="Categorías de noticias"><button class="filter active" data-category="all"><span>⌂</span> Inicio</button><button class="filter" data-category="sport"><span>⚽</span> Deportes</button><button class="filter" data-category="business"><span>▥</span> Finanzas</button><button class="filter" data-category="entertainment"><span>▣</span> Entretenimiento</button><button class="filter" data-category="technology"><span>▦</span> Tecnología</button><button class="filter" data-category="world"><span>◉</span> Actualidad</button></nav>
- <div class="news-panel"><div class="section-heading"><h2 id="news-title"><span class="flame">♨</span> Noticias más recientes</h2><span id="updated">Cargando titulares…</span></div>
+ <nav class="filters" aria-label="Categorías de noticias"><button class="filter active" data-category="all">Inicio</button><button class="filter" data-category="sport">Deportes</button><button class="filter" data-category="business">Finanzas</button><button class="filter" data-category="entertainment">Entretenimiento</button><button class="filter" data-category="technology">Tecnología</button><button class="filter" data-category="world">Actualidad</button></nav>
+ <div class="news-panel"><div class="section-heading"><h2 id="news-title">Noticias más recientes</h2><span id="updated">Cargando titulares…</span></div>
  <div class="news-grid" id="news-grid" aria-live="polite"><article class="loading-card"><span class="skeleton"></span><span class="skeleton short"></span><span class="skeleton"></span></article><article class="loading-card"><span class="skeleton"></span><span class="skeleton short"></span><span class="skeleton"></span></article><article class="loading-card"><span class="skeleton"></span><span class="skeleton short"></span><span class="skeleton"></span></article><article class="loading-card"><span class="skeleton"></span><span class="skeleton short"></span><span class="skeleton"></span></article></div>
- <p class="attribution">Titulares de BBC News · Los artículos se abren en el sitio de su editor.</p></div>
-</section><footer><span>LINDEN</span><span>Firefox · Gecko</span></footer></main><script src="app.js"></script></body></html>
+ </div>
+</section></main>
+<dialog id="history-dialog" class="linden-dialog"><div class="dialog-head"><h2>Historial de búsqueda</h2><button id="history-close" class="close-button" aria-label="Cerrar">×</button></div><div id="history-list" class="history-list"></div></dialog>
+<dialog id="ai-dialog" class="linden-dialog ai-dialog"><div class="dialog-head"><h2>Linden AI</h2><button id="ai-close" class="close-button" aria-label="Cerrar">×</button></div><p class="dialog-muted">Linden AI todavía no está conectada a un modelo. La interfaz está preparada; falta elegir e integrar un proveedor de IA.</p></dialog>
+<script src="app.js"></script></body></html>
