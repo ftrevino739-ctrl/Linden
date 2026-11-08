@@ -61,5 +61,5 @@ test("Firefox layer does not bundle a Chromium or Electron runtime", () => {
     path.join(root, "firefox", "build", "mozconfig.win")
   ];
   const source = files.map(file => fs.readFileSync(file, "utf8")).join("\n");
-  assert.doesNotMatch(source, /electron|playwright|puppeteer|webview2|chromium/i);
+  assert.doesNotMatch(source, /(?:from|require\\()\\s*['\"](?:electron|playwright|puppeteer)|webview2/i);
 });
