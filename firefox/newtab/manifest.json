@@ -1,0 +1,17 @@
+{
+  "manifest_version": 2,
+  "name": "Linden Start",
+  "version": "0.1.0",
+  "description": "A calm, Liquid Glass-inspired start page for the Firefox-based Linden browser.",
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "permissions": [
+    "https://feeds.bbci.co.uk/*"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "linden-start@linden.browser"
+    }
+  }
+}
