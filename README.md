@@ -14,7 +14,7 @@ Linden is an experimental Chromium-based desktop browser with a quiet, Liquid Gl
 ## Requirements
 Node.js 20.19+ or 22.12+, npm, and a Windows/macOS/Linux desktop.
 
-## Run
+## Continuous integration\nGitHub Actions builds Windows, macOS and Linux packages on pushes to the application source.\n\n## Run
 ```bash
 npm install
 npm run dev
