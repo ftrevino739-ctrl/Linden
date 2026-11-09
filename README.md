@@ -6,27 +6,21 @@ Linden is an independent browser project based on **Mozilla Firefox / Gecko**. I
 
 - Real Firefox Desktop engine (Gecko + SpiderMonkey).
 - Linden-branded new-tab extension and browser customization.
-- **Linden Search:** its own results interface and self-hosted search gateway.
+- **Linden Search:** its own UI, gateway, first-party crawler and persistent starter index.
 - Search categories: web, images, news, videos, shopping and maps.
-- No Google or Bing search integration in the Linden Search configuration.
-- A staged plan to build Linden's own crawler and index instead of depending permanently on upstream indexes.
+- No Google or Bing search integration in the active Firefox/Linden Search configuration.
+- Independent upstream discovery extends the limited first-party index while Linden grows its own crawl coverage.
 
 ## Project status
 
-The active Firefox foundation is in [firefox/](firefox/README.md). The first search-engine infrastructure is in [firefox/search-engine/](firefox/search-engine/README.md). The root Electron prototype files remain historical and are not the target Firefox/Gecko architecture.
+The active Firefox foundation is in [firefox/](firefox/README.md). The search service and first-party crawler are in [firefox/search-engine/](firefox/search-engine/README.md). The root Electron prototype files remain historical and are not the active Firefox/Gecko architecture.
 
-Linden Search currently acts as a self-hosted metasearch system: it owns the UI, API gateway and result normalization, while using independent sources to obtain broad web coverage. It is not yet a full-world web index crawled and ranked solely by Linden.
+Linden has started its own index, but it is still a small seed-based crawler, not a full-world search index. Broad discovery also uses independent Brave/Wikimedia sources through SearXNG. That distinction is documented honestly in the search-engine README.
 
 ## Start here
 
-1. Read the [Firefox foundation and setup instructions](firefox/README.md).
-2. Start the local [Linden Search gateway](firefox/search-engine/README.md).
+1. Read the [Firefox foundation](firefox/README.md).
+2. Start the local [Linden Search service and crawler](firefox/search-engine/README.md).
 3. Load the Firefox extension and test every result category.
-
-## Official technical references
-
-- [Firefox Desktop architecture](https://firefox-source-docs.mozilla.org/browser/overview.html)
-- [Gecko engine](https://firefox-source-docs.mozilla.org/overview/gecko.html)
-- [Building Firefox on Windows](https://firefox-source-docs.mozilla.org/setup/windows_build.html)
 
 Linden is an independent project and is not an official Mozilla product.
