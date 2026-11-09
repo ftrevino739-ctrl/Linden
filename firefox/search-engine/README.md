@@ -1,67 +1,102 @@
-# Linden Search — primera infraestructura
+# Linden Search — first crawler + metasearch layer
 
-Linden Search es la capa de búsqueda propia de Linden: interfaz, API de normalización, categorías, reglas de seguridad, caché de mapas y conexión con fuentes independientes. Esta primera versión es un **metabuscador autohospedado**, no un índice mundial construido desde cero.
+Linden Search now has two complementary sources:
 
-## Qué incluye
+1. **Linden Index:** a small first-party crawler and a locally stored search index owned by this project.
+2. **Independent discovery:** a self-hosted SearXNG service configured to query Brave and Wikimedia sources, without Google or Bing.
 
-- **Web:** SearXNG autohospedado, configurado para usar el índice independiente de Brave y Wikipedia.
-- **Imágenes:** categoría de imágenes de Brave a través de SearXNG.
-- **Noticias:** búsqueda de noticias de Brave y Wikinews.
-- **Vídeos:** búsqueda de vídeos de Brave.
-- **Shopping:** resultados de Mercado Libre México; Open Food Facts sirve como respaldo limitado a alimentos y productos relacionados.
-- **Mapas:** geocodificación de OpenStreetMap/Nominatim, con caché y límite de una consulta por segundo.
-- **Sin Google ni Bing:** la lista `keep_only` de SearXNG admite exclusivamente Brave, Wikipedia y Wikinews. No se envían consultas a Google o Bing.
+The first-party index is real but deliberately small. It does not represent the whole web yet.
 
-Linden no copia el logotipo ni la marca de Google. Adopta patrones de uso familiares —pestañas Todo, Imágenes, Noticias, Vídeos, Shopping y Mapas; resultados enlazados, miniaturas y tarjetas de productos— con el diseño propio de Linden.
+## What is implemented
 
-## Requisitos
+- **Web:** local Linden Index matches are merged with results from Brave through SearXNG.
+- **Images:** images extracted from indexed pages are merged with Brave image results.
+- **News:** Brave news and Wikinews through SearXNG.
+- **Videos:** Brave video results through SearXNG.
+- **Shopping:** Mercado Libre México listings; Open Food Facts is a fallback limited to food and related products.
+- **Maps:** OpenStreetMap/Nominatim search, cache and attribution.
+- **No Google or Bing:** SearXNG's \`keep_only\` list includes Brave and Wikimedia engines only.
+- **No public search server:** the gateway port is bound to \`127.0.0.1:8787\` on the user's machine.
+
+## First-party crawler
+
+The crawler is \`gateway/crawler.mjs\`. It currently:
+
+- Starts with HTTPS URLs from \`gateway/seeds.txt\`.
+- Checks the domain's \`robots.txt\` and honors matching Allow/Disallow rules.
+- Uses a per-domain delay of at least 1.2 seconds.
+- Restricts links to the exact seeded domain/origin and one link-following level per run.
+- Rejects non-HTTPS destinations, private IPs, off-domain redirects, oversized pages, and common login/cart/search paths.
+- Stores title, description, extracted text, canonical URL and a small set of same-host images.
+- Skips pages marked \`noindex\`.
+- Saves its index into a persistent Docker volume, so it survives container rebuilds.
+
+The first seed set covers selected Mozilla and MDN pages. Edit \`gateway/seeds.txt\` to add public HTTPS pages/domains you have permission to crawl. This initial crawler does **not** yet parse XML sitemaps, follow links across domains, index every image on a site, or crawl the entire web. Robots.txt is a crawler instruction, not a grant of copyright or reuse rights; indexed results link to the original publisher.
+
+## Requirements
 
 - Windows 10/11.
-- Docker Desktop instalado y abierto.
-- Firefox con la extensión de Linden cargada.
-- Node.js no es necesario para el servicio, porque el gateway corre dentro de Docker.
+- Docker Desktop installed and running.
+- Mozilla Firefox with Linden Start loaded as a temporary add-on.
 
-## Iniciar en Windows
+## Start on Windows
 
-1. Abre Docker Desktop y espera a que indique que está ejecutándose.
-2. Abre PowerShell.
-3. Entra a la carpeta del repositorio:
-   `cd $HOME\Linden-Firefox-Test\firefox\search-engine`
-4. Ejecuta:
-   `powershell -ExecutionPolicy Bypass -File .\start.ps1`
-5. Comprueba que el servicio responde:
-   `Invoke-RestMethod http://127.0.0.1:8787/health`
-6. En Firefox abre `about:debugging#/runtime/this-firefox`, recarga Linden Start y abre una pestaña nueva.
-7. Busca una consulta. La pestaña de resultados se consulta en el gateway local `127.0.0.1:8787`.
+In PowerShell:
 
-Para detener los servicios:
-`docker compose down`
+\`\`\`powershell
+cd $HOME\\Linden-Firefox-Test
+git pull origin firefox
+cd firefox\\search-engine
+powershell -ExecutionPolicy Bypass -File .\\start.ps1
+\`\`\`
 
-## Pruebas manuales del gateway
+Check the API:
 
-```powershell
+\`\`\`powershell
+Invoke-RestMethod http://127.0.0.1:8787/health
+Invoke-RestMethod http://127.0.0.1:8787/api/index/stats
+\`\`\`
+
+### Build Linden's own index
+
+Run this after the containers are up:
+
+\`\`\`powershell
+docker compose exec gateway node crawler.mjs
+\`\`\`
+
+To change seed sites, edit \`gateway/seeds.txt\`, then run the crawl command again. The initial crawl is capped at 25 pages per run; increase only after reviewing the target sites' robots policy and server load. It is intentionally manual at this stage, not a background crawler.
+
+Reload the extension in Firefox at \`about:debugging#/runtime/this-firefox\`, then open a new tab and search. General web and image results can include pages already present in Linden Index.
+
+## Manual API checks
+
+\`\`\`powershell
 Invoke-RestMethod "http://127.0.0.1:8787/api/search?q=Firefox&category=general"
-Invoke-RestMethod "http://127.0.0.1:8787/api/search?q=montañas&category=images"
+Invoke-RestMethod "http://127.0.0.1:8787/api/search?q=JavaScript&category=images"
 Invoke-RestMethod "http://127.0.0.1:8787/api/search?q=tecnología&category=news"
 Invoke-RestMethod "http://127.0.0.1:8787/api/search?q=recetas&category=videos"
 Invoke-RestMethod "http://127.0.0.1:8787/api/shopping?q=audífonos"
 Invoke-RestMethod "http://127.0.0.1:8787/api/maps?q=Monterrey"
-```
+\`\`\`
 
-## Fuentes y límites actuales
+Stop the local service with \`docker compose down\` from \`firefox/search-engine\`. The named Docker volume \`linden-index\` preserves the downloaded index.
 
-- SearXNG agrega motores de búsqueda independientes. Brave aporta su propio índice web; no es una API de Google ni un proxy de Google. SearXNG es software de metabúsqueda, no un crawler con un índice global de Linden.
-- Mercado Libre puede limitar o modificar su API pública. Si no responde, Linden muestra un respaldo de Open Food Facts y enlaces directos de búsqueda en marketplaces.
-- Open Food Facts no es un catálogo general de electrónica, ropa o todos los productos.
-- Nominatim impone límites de uso. El gateway mantiene caché de 15 minutos y espacia consultas para respetar aproximadamente una petición por segundo. Los mapas deben atribuir a OpenStreetMap.
-- Las imágenes y vídeos se sirven desde sus sitios originales; disponibilidad, derechos, miniaturas y reproducción dependen de cada fuente.
+## Sources and limitations
 
-## Próxima etapa para independizar el índice
+- SearXNG is a metasearch service, not an index built by Linden. Brave supplies an independent upstream web index; its HTML-based integration may be rate-limited or change.
+- The first-party Linden Index contains only pages the initial crawler has actually visited. Its initial ranking is a weighted term-frequency score, not mature BM25 yet.
+- Image results from Linden are limited to images the crawler extracted from its indexed pages. Image delivery, copyright and hotlink policies remain with the original sites.
+- Mercado Libre can rate-limit or change its public API. If it fails, Open Food Facts is a narrow fallback, not a general electronics/fashion marketplace.
+- Nominatim's public instance has a strict maximum of one request per second; Linden queues requests and uses a 15-minute cache. Map attribution is displayed.
+- Shopping links to Amazon/Mercado Libre are direct external search links, not product-feed data from Amazon.
 
-1. Añadir un crawler propio que respete robots.txt, sitemaps y límites por dominio.
-2. Extraer título, texto, enlaces canónicos, metadatos Open Graph, imágenes y datos estructurados Schema.org.
-3. Guardar los documentos en un índice local con BM25 y señales de calidad.
-4. Mezclar y volver a ordenar el índice Linden con fuentes externas, midiendo relevancia y frescura.
-5. Crear un índice de productos y fuentes de vídeo con atribución y enlaces originales.
+## Roadmap for a genuinely independent engine
 
-No se debe describir Linden como un buscador con índice mundial propio hasta que ese crawler y ese índice existan y se hayan probado.
+1. Add sitemap ingestion and a persistent crawl queue.
+2. Expand the index format with language, structured data, canonicalization, duplicate detection and freshness.
+3. Improve ranking with BM25 and quality signals.
+4. Add separate first-party product and media indexes, including permission-aware image indexing.
+5. Operate a larger crawler with domain budgets, abuse detection, monitoring and enough storage/compute.
+
+Do not call Linden a full-web independent search engine until its own index has meaningful coverage and the crawler and ranking system have been stress-tested.
