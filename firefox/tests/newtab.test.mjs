@@ -100,19 +100,19 @@ test("Search gateway does not expose the local API to arbitrary websites", () =>
 
 test("Linden first-party crawler is present and respects crawl boundaries", () => {
   const crawler = fs.readFileSync(path.join(root, "firefox", "search-engine", "gateway", "crawler.mjs"), "utf8");
-  assert.match(crawler, /robots\\.txt/);
+  assert.ok(crawler.includes("robots.txt"));
   assert.match(crawler, /allowedByRobots/);
   assert.match(crawler, /assertPublicHttps/);
   assert.match(crawler, /MAX_PAGES/);
   assert.match(crawler, /noindex/);
   assert.match(crawler, /INDEX_PATH/);
   assert.match(crawler, /images/);
-  assert.match(crawler, /visited\\.size < MAX_PAGES/);
+  assert.ok(crawler.includes("visited.size < MAX_PAGES"));
 });
 
 test("Linden local index is blended into web and image search", () => {
   const gateway = fs.readFileSync(path.join(root, "firefox", "search-engine", "gateway", "server.mjs"), "utf8");
   assert.match(gateway, /searchLocalIndex/);
-  assert.match(gateway, /mergeResults\\(local\\.results, remoteResults/);
-  assert.match(gateway, /\\/api\\/index\\/stats/);
+  assert.ok(gateway.includes("mergeResults(local.results, remoteResults"));
+  assert.ok(gateway.includes("/api/index/stats"));
 });
