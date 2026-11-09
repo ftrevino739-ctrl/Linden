@@ -7,6 +7,7 @@ const MELI_ACCESS_TOKEN = process.env.MELI_ACCESS_TOKEN || '';
 const NOMINATIM_MIN_INTERVAL_MS = 1100;
 const mapCache = new Map();
 let lastNominatimRequest = 0;
+let nominatimQueue = Promise.resolve();
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -153,25 +154,31 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function fetchNominatim(url) {
+  const request = nominatimQueue.then(async () => {
+    const wait = Math.max(0, NOMINATIM_MIN_INTERVAL_MS - (Date.now() - lastNominatimRequest));
+    if (wait) await sleep(wait);
+    lastNominatimRequest = Date.now();
+    return getJson(url, {
+      headers: { 'User-Agent': 'LindenSearch/0.1 (OpenStreetMap geocoding; local desktop browser)' }
+    });
+  });
+  nominatimQueue = request.then(() => undefined, () => undefined);
+  return request;
+}
+
 async function searchMaps(q) {
   const cached = mapCache.get(q.toLowerCase());
   if (cached && cached.expires > Date.now()) return cached.value;
-
-  const wait = Math.max(0, NOMINATIM_MIN_INTERVAL_MS - (Date.now() - lastNominatimRequest));
-  if (wait) await sleep(wait);
-  lastNominatimRequest = Date.now();
 
   const target = new URL('https://nominatim.openstreetmap.org/search');
   target.searchParams.set('q', q);
   target.searchParams.set('format', 'jsonv2');
   target.searchParams.set('addressdetails', '1');
   target.searchParams.set('limit', '8');
-  target.searchParams.set('countrycodes', 'mx');
   target.searchParams.set('accept-language', 'es-MX');
 
-  const payload = await getJson(target, {
-    headers: { 'User-Agent': 'LindenSearch/0.1 (OpenStreetMap geocoding; local desktop browser)' }
-  });
+  const payload = await fetchNominatim(target);
   const results = (Array.isArray(payload) ? payload : []).map((item) => {
     const box = Array.isArray(item.boundingbox) ? item.boundingbox.map(Number) : [];
     const south = box[0], north = box[1], west = box[2], east = box[3];
