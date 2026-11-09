@@ -89,3 +89,10 @@ test("Linden Search gateway is bound to loopback on the host", () => {
   assert.match(compose, /SEARXNG_URL: http:\/\/searxng:8080\//);
   assert.match(compose, /MELI_SITE_ID: MLM/);
 });
+
+
+test("Search gateway does not expose the local API to arbitrary websites", () => {
+  const gateway = fs.readFileSync(path.join(root, "firefox", "search-engine", "gateway", "server.mjs"), "utf8");
+  assert.match(gateway, /origin\.startsWith\('moz-extension:\/\/'\)/);
+  assert.doesNotMatch(gateway, /Access-Control-Allow-Origin': '\*'/);
+});
