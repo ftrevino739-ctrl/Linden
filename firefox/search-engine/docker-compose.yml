@@ -1,0 +1,29 @@
+services:
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      SEARXNG_SETTINGS_PATH: /etc/searxng/settings.yml
+      SEARXNG_SECRET: ${SEARXNG_SECRET}
+      SEARXNG_BIND_ADDRESS: 0.0.0.0
+      SEARXNG_PORT: 8080
+      SEARXNG_LIMITER: "false"
+      SEARXNG_IMAGE_PROXY: "true"
+
+  gateway:
+    build:
+      context: ./gateway
+    restart: unless-stopped
+    depends_on:
+      - searxng
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      PORT: 8787
+      SEARXNG_URL: http://searxng:8080/
+      MELI_SITE_ID: MLM
+      MELI_ACCESS_TOKEN: ${MELI_ACCESS_TOKEN:-}
