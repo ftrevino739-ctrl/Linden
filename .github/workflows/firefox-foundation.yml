@@ -19,5 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate Linden Firefox start page
+      - name: Check Linden Search gateway syntax
+        run: node --check firefox/search-engine/gateway/server.mjs
+      - name: Validate Firefox start page and search configuration
         run: node --test firefox/tests/*.test.mjs
