@@ -9,15 +9,23 @@ const mapCache = new Map();
 let lastNominatimRequest = 0;
 let nominatimQueue = Promise.resolve();
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Cache-Control': 'no-store'
-};
+function corsHeadersFor(req) {
+  const origin = String(req.headers.origin || '');
+  const allowed = origin.startsWith('moz-extension://') ||
+    origin === 'http://127.0.0.1:' + PORT ||
+    origin === 'http://localhost:' + PORT;
+  return {
+    'Access-Control-Allow-Origin': allowed ? origin : 'null',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Private-Network': 'true',
+    'Vary': 'Origin',
+    'Cache-Control': 'no-store'
+  };
+}
 
-function send(res, status, payload) {
-  res.writeHead(status, { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' });
+function send(req, res, status, payload) {
+  res.writeHead(status, { ...corsHeadersFor(req), 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(payload));
 }
 
@@ -210,31 +218,31 @@ async function searchMaps(q) {
 
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, corsHeaders);
+    res.writeHead(204, corsHeadersFor(req));
     res.end();
     return;
   }
 
   const url = new URL(req.url || '/', 'http://127.0.0.1:' + PORT);
   try {
-    if (req.method !== 'GET') return send(res, 405, { error: 'Método no permitido.' });
-    if (url.pathname === '/health') return send(res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.1.0' });
+    if (req.method !== 'GET') return send(req, res, 405, { error: 'Método no permitido.' });
+    if (url.pathname === '/health') return send(req, res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.1.0' });
 
     const q = cleanQuery(url.searchParams.get('q'));
     if (url.pathname === '/api/search') {
       const allowed = new Set(['general', 'images', 'news', 'videos']);
       const category = url.searchParams.get('category') || 'general';
-      if (!allowed.has(category)) return send(res, 400, { error: 'Categoría de búsqueda no válida.' });
+      if (!allowed.has(category)) return send(req, res, 400, { error: 'Categoría de búsqueda no válida.' });
       const page = Math.max(1, Math.min(20, Number(url.searchParams.get('page') || 1) || 1));
       return send(res, 200, await searchWeb(q, category, page));
     }
     if (url.pathname === '/api/shopping') return send(res, 200, await searchShopping(q));
     if (url.pathname === '/api/maps') return send(res, 200, await searchMaps(q));
-    return send(res, 404, { error: 'Ruta no encontrada.' });
+    return send(req, res, 404, { error: 'Ruta no encontrada.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido.';
     const status = message.startsWith('Escribe') || message.startsWith('La búsqueda') ? 400 : 502;
-    return send(res, status, { error: message });
+    return send(req, res, status, { error: message });
   }
 });
 
