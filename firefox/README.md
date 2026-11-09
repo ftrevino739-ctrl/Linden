@@ -4,48 +4,39 @@ Linden is being built as a Firefox-based browser distribution. The browser engin
 
 ## Current foundation
 
-- `newtab/`: Firefox WebExtension that replaces the new-tab page.
-- `theme/userChrome.css`: optional Firefox browser-chrome styling.
-- `distribution/distribution.ini`: default preferences for Linden profiles.
-- `branding/linden-drop.svg`: original Linden mark.
-- News cards load recent headlines from public BBC RSS feeds.
-- Search opens a Linden-owned results interface with tabs for web, images, news, videos, shopping and maps. It does not redirect searches to Google.
+- \`newtab/\`: Firefox WebExtension that replaces the new-tab page.
+- \`theme/userChrome.css\`: optional Firefox browser-chrome styling.
+- \`distribution/distribution.ini\`: default preferences for Linden profiles.
+- \`branding/linden-drop.svg\`: original Linden mark.
+- The start page keeps current headlines and supplies a Linden-owned search-results interface with tabs for web, images, news, videos, shopping and maps.
 
 ## Linden Search
 
-The search infrastructure lives in [search-engine/](search-engine/README.md). It contains a local gateway and a SearXNG instance configured to use only the independent Brave and Wikimedia sources listed in `searxng/settings.yml`; Google and Bing are excluded from that allow-list.
+Read [the search-engine setup](search-engine/README.md). Its architecture now includes a first-party crawler and persistent local index, alongside a self-hosted SearXNG service that aggregates independent Brave/Wikimedia sources. Google and Bing are excluded from the SearXNG engine allow-list.
 
-Shopping queries use Mercado Libre México with an Open Food Facts fallback. Maps use OpenStreetMap/Nominatim with a local cache and request pacing. See the search-engine README for important limitations and attribution notes.
+The crawler is a first milestone, not a world-scale index. It starts from a small set of Mozilla/MDN pages, respects robots.txt, is limited to 25 pages per manual run, and stores extracted text and some same-host images in a Docker volume. Broad web discovery still uses the independent upstream index.
 
-### Start the local search service on Windows
+### Windows setup
 
 1. Install and open Docker Desktop.
-2. Open PowerShell in the repository folder.
-3. Run:
-   `cd $HOME\Linden-Firefox-Test\firefox\search-engine`
-4. Run:
-   `powershell -ExecutionPolicy Bypass -File .\start.ps1`
-5. Verify:
-   `Invoke-RestMethod http://127.0.0.1:8787/health`
+2. In PowerShell, run:
 
-The gateway listens only on the local computer at `127.0.0.1:8787`. It is not exposed to the public internet by this configuration.
+   \`cd $HOME\\Linden-Firefox-Test\`
+   
+   \`git pull origin firefox\`
+   
+   \`cd firefox\\search-engine\`
+   
+   \`powershell -ExecutionPolicy Bypass -File .\\start.ps1\`
 
-## Install the development new-tab extension
+3. Check \`Invoke-RestMethod http://127.0.0.1:8787/health\`.
+4. Build the initial local index with \`docker compose exec gateway node crawler.mjs\`.
+5. In actual Mozilla Firefox, open \`about:debugging#/runtime/this-firefox\`, reload Linden Start and open a new tab.
 
-1. Open actual Mozilla Firefox Desktop.
-2. Visit `about:debugging#/runtime/this-firefox`.
-3. Choose **Load Temporary Add-on**.
-4. Select `firefox/newtab/manifest.json` from this repository.
-5. Open a new tab.
+The gateway is bound only to \`127.0.0.1:8787\` on the local PC; it is not exposed as a public service.
 
-Temporary add-ons are removed when Firefox closes. A production Linden installer still needs a reproducible Firefox build/repackaging pipeline and extension distribution/signing strategy.
+## Browser distribution status
 
-## Architecture and limitations
-
-- Firefox owns navigation, tabs, TLS, site isolation, permissions, history, downloads and accessibility.
-- Linden supplies the start page, branding and search interface.
-- Linden Search currently owns the gateway, API normalization, category UI and local service configuration. Broad web search results still come from independent upstream indexes, not from a complete Linden-built world index.
-- Creating a genuinely independent index requires a crawler, robots.txt and sitemap handling, content extraction, canonicalization, deduplication, storage, ranking, spam control, freshness updates and significant compute/storage. That work is the next major search milestone.
-- Search results link to their original publishers. Image and video use depends on the source's rights and availability.
+The current foundation uses Firefox Desktop as the application shell and Gecko as the web engine. A branded standalone Linden installer still requires a reproducible Firefox build/repackaging pipeline, update strategy, security review and compatibility testing. This repo state does not claim that a production installer already exists.
 
 Linden is an independent project and is not an official Mozilla product.
