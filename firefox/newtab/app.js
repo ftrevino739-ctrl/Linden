@@ -41,6 +41,7 @@ document.querySelectorAll(".results-tab").forEach(button => {
 });
 
 homeButton.addEventListener("click", () => {
+  searchRequest++;
   searchQuery = "";
   searchType = "all";
   document.querySelector(".page").classList.remove("searching");
@@ -99,7 +100,7 @@ async function loadResults() {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || "Linden Search respondió HTTP " + response.status);
     if (requestId !== searchRequest) return;
-    resultsSource.textContent = payload.source || "";
+    resultsSource.textContent = [payload.source, payload.notice].filter(Boolean).join(" · ");
     renderResults(payload);
   } catch (error) {
     if (requestId !== searchRequest) return;
@@ -109,12 +110,13 @@ async function loadResults() {
       '<div class="result-message error-message"><h2>No se pudo completar la búsqueda</h2>' +
       '<p>' + escapeHTML(reason) + '</p>' +
       '<p>Inicia el servicio local de Linden Search con Docker Desktop:</p>' +
-      '<code>firefox\search-engine\start.ps1</code>' +
+      '<code>firefox/search-engine/start.ps1</code>' +
       '<p>Después vuelve a intentar. Linden no redirige la consulta a Google.</p></div>';
   }
 }
 
 function renderResults(payload) {
+  resultsGrid.className = "results-grid";
   const items = Array.isArray(payload.results) ? payload.results : [];
   resultsStatus.textContent = Number(payload.total || items.length).toLocaleString("es-MX") + " resultados para “" + searchQuery + "”";
   if (!items.length) {
