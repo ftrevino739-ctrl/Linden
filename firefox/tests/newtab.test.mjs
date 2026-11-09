@@ -14,8 +14,11 @@ const manifest = JSON.parse(read("manifest.json"));
 
 test("Firefox WebExtension manifest is valid and overrides new tabs", () => {
   assert.equal(manifest.manifest_version, 2);
+  assert.equal(manifest.version, "0.3.0");
   assert.equal(manifest.chrome_url_overrides.newtab, "index.html");
   assert.ok(manifest.permissions.includes("https://feeds.bbci.co.uk/*"));
+  assert.ok(manifest.permissions.includes("http://127.0.0.1:8787/*"));
+  assert.ok(manifest.permissions.includes("history"));
   assert.equal(manifest.browser_specific_settings.gecko.id, "linden-start@linden.browser");
 });
 
@@ -26,28 +29,34 @@ test("all local assets referenced by the start page exist", () => {
   }
 });
 
-test("requested product content is present and unwanted tagline is absent", () => {
-  for (const label of ["Deportes", "Finanzas", "Entretenimiento", "Tecnología", "Actualidad"]) {
-    assert.ok(html.includes(label), "Missing category: " + label);
+test("new tab exposes all requested Linden Search categories", () => {
+  for (const label of ["Todos", "Imágenes", "Noticias", "Vídeos", "Shopping", "Maps"]) {
+    assert.ok(html.includes(label), "Missing search category: " + label);
   }
   assert.match(html, /id="query"/);
+  assert.match(html, /id="results-grid"/);
   assert.match(html, /Noticias más recientes/);
-  assert.doesNotMatch(html, /Navega\.?\s*Descubre\.?\s*Explora/i);
 });
 
-test("new-tab script parses and supports search, filters and RSS", () => {
+test("new-tab script parses and routes searches through the local Linden gateway", () => {
   assert.doesNotThrow(() => new vm.Script(js, { filename: "app.js" }));
-  assert.match(js, /duckduckgo\.com/);
-  assert.match(js, /Promise\.all\(feeds\.map\(loadFeed\)\)/);
-  assert.match(js, /AbortController/);
-  assert.match(js, /item\.category===selected/);
+  assert.match(js, /127\.0\.0\.1:8787/);
+  assert.match(js, /\/api\/shopping/);
+  assert.match(js, /\/api\/maps/);
+  assert.match(js, /category=images/);
+  assert.match(js, /category=news/);
+  assert.match(js, /category=videos/);
+  assert.doesNotMatch(js, /google\.com|duckduckgo\.com|bing\.com/i);
   assert.match(js, /noopener noreferrer/);
 });
 
-test("Liquid Glass styling stays warm, responsive and accessible", () => {
-  assert.match(css, /backdrop-filter:\s*blur/);
-  assert.match(css, /#f3c86c|#f7d98e|#e7b951/i);
-  assert.match(css, /@media\s*\(max-width:\s*560px\)/);
+test("visual results include web, image, shopping, video and map layouts", () => {
+  assert.match(css, /\.results-tabs/);
+  assert.match(css, /\.image-results/);
+  assert.match(css, /\.shopping-results/);
+  assert.match(css, /\.map-results/);
+  assert.match(css, /\.video-thumb/);
+  assert.match(css, /@media\s*\(max-width:\s*700px\)/);
   assert.match(css, /prefers-reduced-motion/);
   assert.doesNotMatch(css, /#(?:00ff|ff00ff|00ffff)/i);
 });
