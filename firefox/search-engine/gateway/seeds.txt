@@ -1,0 +1,9 @@
+# Linden Search initial crawl seeds. HTTPS only; every robots.txt policy is checked.
+# The first crawler is intentionally small and domain-scoped, not a whole-web crawler.
+https://developer.mozilla.org/en-US/docs/Web
+https://developer.mozilla.org/en-US/docs/Web/JavaScript
+https://developer.mozilla.org/en-US/docs/Web/HTML
+https://developer.mozilla.org/en-US/docs/Web/CSS
+https://www.mozilla.org/en-US/firefox/
+https://support.mozilla.org/en-US/products/firefox
+https://www.wikipedia.org/
