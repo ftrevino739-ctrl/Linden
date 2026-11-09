@@ -145,7 +145,7 @@ async function searchLocalIndex(query, { imagesOnly = false } = {}) {
   return { total: results.length, results: results.slice(0, 12) };
 }
 
-function mergeResults(primary, secondary) {
+function mergeResults(primary, secondary, includeImage = false) {
   const seen = new Set();
   const results = [];
   for (const item of [...primary, ...secondary]) {
@@ -154,7 +154,7 @@ function mergeResults(primary, secondary) {
       try {
         const u = new URL(item.url);
         u.hash = '';
-        return u.href.replace(/\/$/, '');
+        return u.href.replace(/\/$/, '') + (includeImage ? '|' + (item.img_src || item.thumbnail || '') : '');
       } catch { return item.url; }
     })();
     if (seen.has(key)) continue;
@@ -186,9 +186,7 @@ async function searchWeb(q, category, page) {
   const local = (category === 'general' || category === 'images')
     ? await searchLocalIndex(q, { imagesOnly: category === 'images' })
     : { total: 0, results: [] };
-  let payload = null;
-  let remoteError = null;
-  try {
+
   const target = new URL('search', SEARXNG_URL);
   target.searchParams.set('q', q);
   target.searchParams.set('format', 'json');
@@ -197,17 +195,20 @@ async function searchWeb(q, category, page) {
   target.searchParams.set('pageno', String(page));
   target.searchParams.set('safesearch', '1');
 
+  let payload = null;
+  let remoteError = null;
+  try {
     payload = await getJson(target);
   } catch (error) {
     remoteError = error;
   }
-  if (!payload && !local.results.length) throw (remoteError || new Error('No hay resultados disponibles.'));
-  const remoteResults = Array.isArray(payload?.results) ? payload.results.map((item) => ({
-    query: q,
-    category,
-    total: Number(payload.number_of_results || 0),
-    source: 'Brave Search vía SearXNG',
-    results: [{
+
+  if (!payload && !local.results.length) {
+    throw (remoteError || new Error('No hay resultados disponibles.'));
+  }
+
+  const remoteResults = (Array.isArray(payload?.results) ? payload.results : [])
+    .map((item) => ({
       title: String(item.title || 'Resultado sin título'),
       url: httpsUrl(item.url),
       content: String(item.content || item.description || ''),
@@ -216,18 +217,26 @@ async function searchWeb(q, category, page) {
       publishedDate: item.publishedDate || null,
       engine: item.engine || (Array.isArray(item.engines) ? item.engines.join(', ') : ''),
       score: Number(item.score || 0)
-    })).filter((item) => item.url) : [];
-  const combined = mergeResults(local.results, remoteResults);
+    }))
+    .filter((item) => item.url);
+
+  const combined = (category === 'general' || category === 'images')
+    ? mergeResults(local.results, remoteResults, category === 'images')
+    : remoteResults;
+
   return {
     query: q,
     category,
     total: Number(payload?.number_of_results || remoteResults.length) + local.total,
-    source: local.total ? 'Linden Index + Brave Search independiente vía SearXNG' : 'Brave Search independiente vía SearXNG',
-    notice: remoteError ? 'Brave no respondió; se muestran coincidencias del índice local de Linden.' : undefined,
+    source: local.total
+      ? 'Linden Index + Brave Search independiente vía SearXNG'
+      : 'Brave Search independiente vía SearXNG',
+    notice: remoteError
+      ? 'Brave no respondió; se muestran coincidencias del índice local de Linden.'
+      : undefined,
     results: combined
   };
 }
-
 function marketplaceLinks(q) {
   const term = encodeURIComponent(q);
   return [
