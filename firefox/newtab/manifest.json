@@ -1,15 +1,15 @@
 {
   "manifest_version": 2,
   "name": "Linden Start",
-  "version": "0.2.0",
-  "description": "A warm, restrained start page for Linden.",
+  "version": "0.3.0",
+  "description": "Página de inicio y búsqueda propia de Linden, con fuentes independientes.",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
   "permissions": [
     "https://feeds.bbci.co.uk/*",
-    "history",
-    "search"
+    "http://127.0.0.1:8787/*",
+    "history"
   ],
   "browser_specific_settings": {
     "gecko": {
