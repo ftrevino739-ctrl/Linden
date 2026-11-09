@@ -2,7 +2,7 @@ name: Linden Firefox foundation checks
 
 on:
   push:
-    branches: [firefox-gecko-foundation]
+    branches: [firefox]
     paths:
       - "firefox/**"
       - ".github/workflows/firefox-foundation.yml"
