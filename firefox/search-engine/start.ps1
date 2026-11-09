@@ -14,7 +14,9 @@ try {
 
 if (-not (Test-Path ".env")) {
     $bytes = New-Object byte[] 32
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $rng.GetBytes($bytes)
+    $rng.Dispose()
     $secret = [Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "x").Replace("/", "y")
     $content = Get-Content ".env.example" -Raw
     $content = $content.Replace("replace-this-local-secret", $secret)
