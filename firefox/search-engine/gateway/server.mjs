@@ -1,4 +1,5 @@
 import http from 'node:http';
+import fs from 'node:fs/promises';
 
 const PORT = Number(process.env.PORT || 8787);
 const SEARXNG_URL = (process.env.SEARXNG_URL || 'http://127.0.0.1:8080/').replace(/\/?$/, '/');
@@ -62,7 +63,132 @@ async function getJson(url, options = {}, timeoutMs = 12000) {
   return response.json();
 }
 
+
+const INDEX_PATH = process.env.LINDEN_INDEX_PATH || '/data/index.json';
+
+function normalizeText(value) {
+  return String(value || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function queryTokens(query) {
+  return [...new Set(normalizeText(query).split(/\s+/).filter(token => token.length > 1))];
+}
+
+async function searchLocalIndex(query, { imagesOnly = false } = {}) {
+  let documents = [];
+  try {
+    const stored = JSON.parse(await fs.readFile(INDEX_PATH, 'utf8'));
+    if (Array.isArray(stored.documents)) documents = stored.documents;
+  } catch {}
+  const terms = queryTokens(query);
+  if (!terms.length || !documents.length) return { total: 0, results: [] };
+
+  const ranked = [];
+  for (const doc of documents) {
+    const title = normalizeText(doc.title);
+    const description = normalizeText(doc.description);
+    const content = normalizeText(doc.content);
+    const whole = title + ' ' + description + ' ' + content;
+    const scoreTerm = (term) => {
+      const titleHits = title.split(term).length - 1;
+      const descriptionHits = description.split(term).length - 1;
+      const contentHits = content.split(term).length - 1;
+      return titleHits * 5 + descriptionHits * 2 + contentHits;
+    };
+    const matched = terms.reduce((sum, term) => sum + (whole.includes(term) ? 1 : 0), 0);
+    if (!matched) continue;
+    let score = terms.reduce((sum, term) => sum + scoreTerm(term), 0);
+    if (title.includes(normalizeText(query))) score += 12;
+    score += matched / terms.length;
+    if (!imagesOnly) {
+      ranked.push({
+        score,
+        item: {
+          title: String(doc.title || doc.url),
+          url: String(doc.url || ''),
+          content: String(doc.description || doc.content || '').slice(0, 450),
+          engine: 'Linden Index',
+          score
+        }
+      });
+      continue;
+    }
+    for (const image of Array.isArray(doc.images) ? doc.images : []) {
+      const label = normalizeText(image.alt || doc.title);
+      const imageMatches = terms.reduce((sum, term) => sum + (label.includes(term) || whole.includes(term) ? 1 : 0), 0);
+      if (!imageMatches) continue;
+      ranked.push({
+        score: score + imageMatches * 2,
+        item: {
+          title: String(image.alt || doc.title || 'Imagen'),
+          url: String(doc.url || ''),
+          img_src: httpsUrl(image.imageUrl),
+          thumbnail: httpsUrl(image.imageUrl),
+          engine: 'Linden Index',
+          score: score + imageMatches * 2
+        }
+      });
+    }
+  }
+
+  ranked.sort((a, b) => b.score - a.score);
+  const unique = new Map();
+  for (const entry of ranked) {
+    const item = entry.item;
+    const key = (item.url || '') + (imagesOnly ? '|' + (item.img_src || '') : '');
+    if (key && !unique.has(key)) unique.set(key, item);
+  }
+  const results = [...unique.values()];
+  return { total: results.length, results: results.slice(0, 12) };
+}
+
+function mergeResults(primary, secondary) {
+  const seen = new Set();
+  const results = [];
+  for (const item of [...primary, ...secondary]) {
+    if (!item.url) continue;
+    const key = (() => {
+      try {
+        const u = new URL(item.url);
+        u.hash = '';
+        return u.href.replace(/\/$/, '');
+      } catch { return item.url; }
+    })();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(item);
+  }
+  return results;
+}
+
+async function indexStats() {
+  try {
+    const stored = JSON.parse(await fs.readFile(INDEX_PATH, 'utf8'));
+    const documents = Array.isArray(stored.documents) ? stored.documents : [];
+    return {
+      name: 'Linden Index',
+      documents: documents.length,
+      domains: new Set(documents.map(doc => {
+        try { return new URL(doc.url).hostname; } catch { return ''; }
+      }).filter(Boolean)).size,
+      updatedAt: stored.updatedAt || null,
+      lastCrawl: stored.crawl || null
+    };
+  } catch {
+    return { name: 'Linden Index', documents: 0, domains: 0, updatedAt: null, lastCrawl: null };
+  }
+}
+
 async function searchWeb(q, category, page) {
+  const local = (category === 'general' || category === 'images')
+    ? await searchLocalIndex(q, { imagesOnly: category === 'images' })
+    : { total: 0, results: [] };
+  let payload = null;
+  let remoteError = null;
+  try {
   const target = new URL('search', SEARXNG_URL);
   target.searchParams.set('q', q);
   target.searchParams.set('format', 'json');
@@ -71,14 +197,17 @@ async function searchWeb(q, category, page) {
   target.searchParams.set('pageno', String(page));
   target.searchParams.set('safesearch', '1');
 
-  const payload = await getJson(target);
-  const results = Array.isArray(payload.results) ? payload.results : [];
-  return {
+    payload = await getJson(target);
+  } catch (error) {
+    remoteError = error;
+  }
+  if (!payload && !local.results.length) throw (remoteError || new Error('No hay resultados disponibles.'));
+  const remoteResults = Array.isArray(payload?.results) ? payload.results.map((item) => ({
     query: q,
     category,
-    total: Number(payload.number_of_results || results.length),
-    source: 'Linden Search · índice independiente de Brave, agregado por SearXNG',
-    results: results.map((item) => ({
+    total: Number(payload.number_of_results || 0),
+    source: 'Brave Search vía SearXNG',
+    results: [{
       title: String(item.title || 'Resultado sin título'),
       url: httpsUrl(item.url),
       content: String(item.content || item.description || ''),
@@ -87,7 +216,15 @@ async function searchWeb(q, category, page) {
       publishedDate: item.publishedDate || null,
       engine: item.engine || (Array.isArray(item.engines) ? item.engines.join(', ') : ''),
       score: Number(item.score || 0)
-    })).filter((item) => item.url)
+    })).filter((item) => item.url) : [];
+  const combined = mergeResults(local.results, remoteResults);
+  return {
+    query: q,
+    category,
+    total: Number(payload?.number_of_results || remoteResults.length) + local.total,
+    source: local.total ? 'Linden Index + Brave Search independiente vía SearXNG' : 'Brave Search independiente vía SearXNG',
+    notice: remoteError ? 'Brave no respondió; se muestran coincidencias del índice local de Linden.' : undefined,
+    results: combined
   };
 }
 
@@ -226,7 +363,8 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://127.0.0.1:' + PORT);
   try {
     if (req.method !== 'GET') return send(req, res, 405, { error: 'Método no permitido.' });
-    if (url.pathname === '/health') return send(req, res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.1.0' });
+    if (url.pathname === '/health') return send(req, res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.2.0' });
+    if (url.pathname === '/api/index/stats') return send(req, res, 200, await indexStats());
 
     const q = cleanQuery(url.searchParams.get('q'));
     if (url.pathname === '/api/search') {
@@ -234,10 +372,10 @@ const server = http.createServer(async (req, res) => {
       const category = url.searchParams.get('category') || 'general';
       if (!allowed.has(category)) return send(req, res, 400, { error: 'Categoría de búsqueda no válida.' });
       const page = Math.max(1, Math.min(20, Number(url.searchParams.get('page') || 1) || 1));
-      return send(res, 200, await searchWeb(q, category, page));
+      return send(req, res, 200, await searchWeb(q, category, page));
     }
-    if (url.pathname === '/api/shopping') return send(res, 200, await searchShopping(q));
-    if (url.pathname === '/api/maps') return send(res, 200, await searchMaps(q));
+    if (url.pathname === '/api/shopping') return send(req, res, 200, await searchShopping(q));
+    if (url.pathname === '/api/maps') return send(req, res, 200, await searchMaps(q));
     return send(req, res, 404, { error: 'Ruta no encontrada.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido.';
