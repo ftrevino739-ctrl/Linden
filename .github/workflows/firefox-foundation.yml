@@ -20,6 +20,6 @@ jobs:
         with:
           node-version: 22
       - name: Check Linden Search gateway syntax
-        run: node --check firefox/search-engine/gateway/server.mjs
+        run: node --check firefox/search-engine/gateway/server.mjs && node --check firefox/search-engine/gateway/crawler.mjs
       - name: Validate Firefox start page and search configuration
         run: node --test firefox/tests/*.test.mjs
