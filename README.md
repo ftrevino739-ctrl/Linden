@@ -1,27 +1,27 @@
 # Linden
 
-Linden is a calm, Liquid Glass-inspired browser project built on **Mozilla Firefox / Gecko**. The product direction is deliberately no-AI: a fast browser with a gold droplet identity, a clean search/start page and a useful live news feed.
+Linden is an independent browser project based on **Mozilla Firefox / Gecko**. Its visual identity is warm, restrained and gold-toned, with its own start page, search experience and optional AI assistant.
 
-## Current development direction
+## Current direction
 
-The original Electron/Chromium prototype is no longer the product architecture. The active foundation is in [firefox/](firefox/README.md):
-
-- Real Firefox Desktop engine (Gecko + SpiderMonkey), not Chromium.
-- A minimal start page with page title, search field and current headlines.
-- News categories: current affairs, sports, finance/business, entertainment and technology.
-- Muted champagne-gold droplet mark.
-- Restrained translucent surfaces, graphite text and warm neutrals; no neon palette.
-- No AI features, AI services or AI API keys.
+- Real Firefox Desktop engine (Gecko + SpiderMonkey).
+- Linden-branded new-tab extension and browser customization.
+- **Linden Search:** its own results interface and self-hosted search gateway.
+- Search categories: web, images, news, videos, shopping and maps.
+- No Google or Bing search integration in the Linden Search configuration.
+- A staged plan to build Linden's own crawler and index instead of depending permanently on upstream indexes.
 
 ## Project status
 
-The firefox-gecko-foundation branch contains the first Firefox customization layer: a new-tab WebExtension, RSS news cards, optional userChrome styling, distribution defaults and the Linden droplet SVG.
+The active Firefox foundation is in [firefox/](firefox/README.md). The first search-engine infrastructure is in [firefox/search-engine/](firefox/search-engine/README.md). The root Electron prototype files remain historical and are not the target Firefox/Gecko architecture.
 
-This is an early foundation, not yet a standalone branded Firefox installer. The next major engineering milestone is a reproducible Windows Firefox build/repackaging pipeline using Mozilla's source and build system. The existing root Electron files are retained temporarily as prototype history and are not the target architecture.
+Linden Search currently acts as a self-hosted metasearch system: it owns the UI, API gateway and result normalization, while using independent sources to obtain broad web coverage. It is not yet a full-world web index crawled and ranked solely by Linden.
 
 ## Start here
 
-See [Firefox foundation and setup instructions](firefox/README.md).
+1. Read the [Firefox foundation and setup instructions](firefox/README.md).
+2. Start the local [Linden Search gateway](firefox/search-engine/README.md).
+3. Load the Firefox extension and test every result category.
 
 ## Official technical references
 
