@@ -91,7 +91,8 @@ async function loadResults() {
   }[searchType] || "/api/search?category=general";
 
   try {
-    const response = await fetch(SEARCH_API + route + "&q=" + encodeURIComponent(searchQuery), {
+    const separator = route.includes("?") ? "&" : "?";
+    const response = await fetch(SEARCH_API + route + separator + "q=" + encodeURIComponent(searchQuery), {
       headers: { "Accept": "application/json" },
       signal: AbortSignal.timeout(18000)
     });
