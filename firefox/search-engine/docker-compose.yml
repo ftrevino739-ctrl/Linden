@@ -27,3 +27,11 @@ services:
       SEARXNG_URL: http://searxng:8080/
       MELI_SITE_ID: MLM
       MELI_ACCESS_TOKEN: ${MELI_ACCESS_TOKEN:-}
+      LINDEN_INDEX_PATH: /data/index.json
+      LINDEN_SEEDS_PATH: /app/seeds.txt
+    volumes:
+      - linden-index:/data
+      - ./gateway/seeds.txt:/app/seeds.txt:ro
+
+volumes:
+  linden-index:
