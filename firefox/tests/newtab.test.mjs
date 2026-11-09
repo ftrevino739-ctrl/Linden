@@ -71,3 +71,21 @@ test("Firefox layer does not bundle a Chromium or Electron runtime", () => {
   const source = files.map(file => fs.readFileSync(file, "utf8")).join("\n");
   assert.doesNotMatch(source, /(?:from\s*['"](?:electron|playwright|puppeteer)|require\(['"](?:electron|playwright|puppeteer)|webview2)/i);
 });
+
+
+test("Linden Search keeps Google and Bing out of its upstream engine allow-list", () => {
+  const config = fs.readFileSync(path.join(root, "firefox", "search-engine", "searxng", "settings.yml"), "utf8");
+  assert.match(config, /keep_only:/);
+  for (const engine of ["brave", "brave.images", "brave.news", "brave.videos", "wikipedia", "wikinews"]) {
+    assert.match(config, new RegExp("- " + engine.replace(".", "\\.")));
+  }
+  assert.doesNotMatch(config, /^\s*- (?:google|bing)(?:\s|$)/m);
+  assert.match(config, /formats:\s*\n\s*- html\s*\n\s*- json/);
+});
+
+test("Linden Search gateway is bound to loopback on the host", () => {
+  const compose = fs.readFileSync(path.join(root, "firefox", "search-engine", "docker-compose.yml"), "utf8");
+  assert.match(compose, /127\.0\.0\.1:8787:8787/);
+  assert.match(compose, /SEARXNG_URL: http:\/\/searxng:8080\//);
+  assert.match(compose, /MELI_SITE_ID: MLM/);
+});
