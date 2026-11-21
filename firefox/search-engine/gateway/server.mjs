@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import { rankLocalDocuments } from './search-ranking.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const SEARXNG_URL = (process.env.SEARXNG_URL || 'http://127.0.0.1:8080/').replace(/\/?$/, '/');
@@ -66,104 +67,42 @@ async function getJson(url, options = {}, timeoutMs = 12000) {
 
 const INDEX_PATH = process.env.LINDEN_INDEX_PATH || '/data/index.json';
 
-function normalizeText(value) {
-  return String(value || '').toLowerCase().normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-function queryTokens(query) {
-  return [...new Set(normalizeText(query).split(/\s+/).filter(token => token.length > 1))];
-}
-
 async function searchLocalIndex(query, { imagesOnly = false } = {}) {
   let documents = [];
   try {
     const stored = JSON.parse(await fs.readFile(INDEX_PATH, 'utf8'));
     if (Array.isArray(stored.documents)) documents = stored.documents;
   } catch {}
-  const terms = queryTokens(query);
-  if (!terms.length || !documents.length) return { total: 0, results: [] };
-
-  const ranked = [];
-  for (const doc of documents) {
-    const title = normalizeText(doc.title);
-    const description = normalizeText(doc.description);
-    const content = normalizeText(doc.content);
-    const whole = title + ' ' + description + ' ' + content;
-    const scoreTerm = (term) => {
-      const titleHits = title.split(term).length - 1;
-      const descriptionHits = description.split(term).length - 1;
-      const contentHits = content.split(term).length - 1;
-      return titleHits * 5 + descriptionHits * 2 + contentHits;
-    };
-    const matched = terms.reduce((sum, term) => sum + (whole.includes(term) ? 1 : 0), 0);
-    if (!matched) continue;
-    let score = terms.reduce((sum, term) => sum + scoreTerm(term), 0);
-    if (title.includes(normalizeText(query))) score += 12;
-    score += matched / terms.length;
-    if (!imagesOnly) {
-      ranked.push({
-        score,
-        item: {
-          title: String(doc.title || doc.url),
-          url: String(doc.url || ''),
-          content: String(doc.description || doc.content || '').slice(0, 450),
-          engine: 'Linden Index',
-          score
-        }
-      });
-      continue;
-    }
-    for (const image of Array.isArray(doc.images) ? doc.images : []) {
-      const label = normalizeText(image.alt || doc.title);
-      const imageMatches = terms.reduce((sum, term) => sum + (label.includes(term) || whole.includes(term) ? 1 : 0), 0);
-      if (!imageMatches) continue;
-      ranked.push({
-        score: score + imageMatches * 2,
-        item: {
-          title: String(image.alt || doc.title || 'Imagen'),
-          url: String(doc.url || ''),
-          img_src: httpsUrl(image.imageUrl),
-          thumbnail: httpsUrl(image.imageUrl),
-          engine: 'Linden Index',
-          score: score + imageMatches * 2
-        }
-      });
-    }
-  }
-
-  ranked.sort((a, b) => b.score - a.score);
-  const unique = new Map();
-  for (const entry of ranked) {
-    const item = entry.item;
-    const key = (item.url || '') + (imagesOnly ? '|' + (item.img_src || '') : '');
-    if (key && !unique.has(key)) unique.set(key, item);
-  }
-  const results = [...unique.values()];
-  return { total: results.length, results: results.slice(0, 12) };
+  const results = rankLocalDocuments(query, documents, { imagesOnly, limit: 8 });
+  return { total: results.length, results };
 }
 
 function mergeResults(primary, secondary, includeImage = false) {
   const seen = new Set();
   const results = [];
-  for (const item of [...primary, ...secondary]) {
-    if (!item.url) continue;
-    const key = (() => {
-      try {
-        const u = new URL(item.url);
-        u.hash = '';
-        return u.href.replace(/\/$/, '') + (includeImage ? '|' + (item.img_src || item.thumbnail || '') : '');
-      } catch { return item.url; }
-    })();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    results.push(item);
+  const lists = [primary, secondary];
+  const maxLength = Math.max(primary.length, secondary.length);
+
+  for (let index = 0; index < maxLength; index++) {
+    for (const list of lists) {
+      const item = list[index];
+      if (!item?.url) continue;
+      const key = (() => {
+        try {
+          const u = new URL(item.url);
+          u.hash = '';
+          return u.href.replace(/\/$/, '') + (includeImage ? '|' + (item.img_src || item.thumbnail || '') : '');
+        } catch {
+          return item.url;
+        }
+      })();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(item);
+    }
   }
   return results;
 }
-
 async function indexStats() {
   try {
     const stored = JSON.parse(await fs.readFile(INDEX_PATH, 'utf8'));
@@ -372,7 +311,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://127.0.0.1:' + PORT);
   try {
     if (req.method !== 'GET') return send(req, res, 405, { error: 'Método no permitido.' });
-    if (url.pathname === '/health') return send(req, res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.2.0' });
+    if (url.pathname === '/health') return send(req, res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.3.0' });
     if (url.pathname === '/api/index/stats') return send(req, res, 200, await indexStats());
 
     const q = cleanQuery(url.searchParams.get('q'));
