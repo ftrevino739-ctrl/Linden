@@ -69,6 +69,10 @@ To change seed sites, edit \`gateway/seeds.txt\`, then run the crawl command aga
 
 Reload the extension in Firefox at \`about:debugging#/runtime/this-firefox\`, then open a new tab and search. General web and image results can include pages already present in Linden Index.
 
+## Search ranking regression tests
+
+From the repository root, run `node --test firefox/tests/search-ranking.test.mjs` to verify title relevance, whole-token matching, accent normalization, image-label matching, empty indexes and duplicate canonical URLs.
+
 ## Manual API checks
 
 \`\`\`powershell
@@ -85,7 +89,7 @@ Stop the local service with \`docker compose down\` from \`firefox/search-engine
 ## Sources and limitations
 
 - SearXNG is a metasearch service, not an index built by Linden. Brave supplies an independent upstream web index; its HTML-based integration may be rate-limited or change.
-- The first-party Linden Index contains only pages the initial crawler has actually visited. Its initial ranking is a weighted term-frequency score, not mature BM25 yet.
+- The first-party Linden Index contains only pages the crawler has actually visited. Its local ranking now uses exact token boundaries, field-aware BM25 scoring, phrase boosts for titles and descriptions, duplicate URL suppression, and a relevance cutoff. Up to eight local matches are blended with upstream results. This remains an early ranking model without mature link-authority, freshness, or large-scale quality signals.
 - Image results from Linden are limited to images the crawler extracted from its indexed pages. Image delivery, copyright and hotlink policies remain with the original sites.
 - Mercado Libre can rate-limit or change its public API. If it fails, Open Food Facts is a narrow fallback, not a general electronics/fashion marketplace.
 - Nominatim's public instance has a strict maximum of one request per second; Linden queues requests and uses a 15-minute cache. Map attribution is displayed.
@@ -95,7 +99,7 @@ Stop the local service with \`docker compose down\` from \`firefox/search-engine
 
 1. Add sitemap ingestion and a persistent crawl queue.
 2. Expand the index format with language, structured data, canonicalization, duplicate detection and freshness.
-3. Improve ranking with BM25 and quality signals.
+3. Calibrate ranking with link authority, freshness, language detection and quality signals.
 4. Add separate first-party product and media indexes, including permission-aware image indexing.
 5. Operate a larger crawler with domain budgets, abuse detection, monitoring and enough storage/compute.
 
