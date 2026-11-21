@@ -123,7 +123,7 @@ export function rankLocalDocuments(query, documents, { imagesOnly = false, limit
     }
 
     for (const image of Array.isArray(doc.images) ? doc.images : []) {
-      const labelTokens = tokenize((image.alt || '') + ' ' + (doc.title || ''));
+      const labelTokens = tokenize(image.alt || doc.title || '');
       const imageMatches = terms.filter(term => labelTokens.includes(term));
       if (!imageMatches.length) continue;
       const imageScore = score + imageMatches.length * 2.5 +
