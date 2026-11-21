@@ -28,7 +28,7 @@ function bm25(fieldCounts, fieldLength, averageLength, weight, idf) {
   const k1 = 1.2;
   const b = 0.68;
   for (const [term, tf] of fieldCounts) {
-    if (!tf) continue;
+    if (!tf || !idf.has(term)) continue;
     const lengthNorm = 1 - b + b * fieldLength / Math.max(1, averageLength);
     score += idf.get(term) * weight * ((tf * (k1 + 1)) / (tf + k1 * lengthNorm));
   }
