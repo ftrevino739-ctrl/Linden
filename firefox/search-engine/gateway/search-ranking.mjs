@@ -101,11 +101,11 @@ export function rankLocalDocuments(query, documents, { imagesOnly = false, limit
     const score =
       bm25(entry.titleCounts, titleTokens.length, averages.title, 7, termIdf) +
       bm25(entry.descriptionCounts, descriptionTokens.length, averages.description, 3.2, termIdf) +
-      bm25(entry.contentCounts, contentTokens.length, averages.content, 1, termIdf) +
-      (matchedTerms.length / terms.length) * 2.4 +
+      bm25(entry.contentCounts, contentTokens.length, averages.content, 0.75, termIdf) +
+      (matchedTerms.length / terms.length) * 0.75 +
       (containsPhrase(titleTokens, terms) ? 11 : 0) +
       (containsPhrase(descriptionTokens, terms) ? 4.5 : 0) +
-      (containsPhrase(contentTokens, terms) ? 1.2 : 0) +
+      (containsPhrase(contentTokens, terms) ? 0.35 : 0) +
       (titleTokens.join(' ') === queryText ? 6 : 0);
 
     if (!imagesOnly) {
@@ -147,7 +147,7 @@ export function rankLocalDocuments(query, documents, { imagesOnly = false, limit
   ranked.sort((a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title));
   if (!ranked.length) return [];
 
-  const cutoff = Math.max(0.85, ranked[0].score * 0.06);
+  const cutoff = Math.max(0.85, ranked[0].score * 0.16);
   const unique = new Map();
   for (const entry of ranked) {
     if (entry.score < cutoff) continue;
