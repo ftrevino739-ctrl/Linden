@@ -25,7 +25,9 @@ The crawler is \`gateway/crawler.mjs\`. It currently:
 - Starts with HTTPS URLs from \`gateway/seeds.txt\`.
 - Checks the domain's \`robots.txt\` and honors matching Allow/Disallow rules.
 - Uses a per-domain delay of at least 1.2 seconds.
-- Restricts discovered links to the exact page host and one link-following level per run.
+- Discovers page URLs from `Sitemap:` directives in `robots.txt`, plus conventional `/sitemap.xml` and `/sitemap_index.xml` locations. It can follow same-origin sitemap indexes with per-run file and URL caps.
+- Restricts HTML-discovered links to the exact page origin and one link-following level per run; sitemap-discovered pages are also restricted to the sitemap's final origin.
+- Keeps a persistent queue in `/data/crawl-queue.json`, stored in the same Docker volume as the index. Visited URLs are remembered across runs, pending work survives restarts, duplicate URLs are suppressed, and temporary fetch failures are requeued for a later run.
 - Rejects non-HTTPS destinations, private IPs, unapproved host redirects, oversized pages, and common login/cart/search paths.
 - Allows a small, explicit set of host-to-host redirect aliases from `gateway/redirect-hosts.txt`, including the current `www.mozilla.org` → `www.firefox.com` transition; every redirect hop is checked separately, DNS/public-IP validation is repeated, and the destination's `robots.txt` policy is checked before the redirected page is fetched.
 - Stores title, description, extracted text, canonical URL and a small set of same-host images.
@@ -72,7 +74,7 @@ Reload the extension in Firefox at \`about:debugging#/runtime/this-firefox\`, th
 
 ## Automated regression tests
 
-From the repository root, run `node --test firefox/tests/search-ranking.test.mjs` to verify title relevance, whole-token matching, accent normalization, image-label matching, empty indexes and duplicate canonical URLs. Run `node --test firefox/tests/crawler-safety.test.mjs` to verify that same-host and explicitly approved redirects work while unlisted hosts, HTTPS downgrades, credentials and nonstandard ports are rejected.
+From the repository root, run `node --test firefox/tests/search-ranking.test.mjs` to verify title relevance, whole-token matching, accent normalization, image-label matching, empty indexes and duplicate canonical URLs. Run `node --test firefox/tests/crawler-safety.test.mjs` to verify that same-host and explicitly approved redirects work while unlisted hosts, HTTPS downgrades, credentials and nonstandard ports are rejected. Run `node --test firefox/tests/crawl-discovery.test.mjs` to verify sitemap parsing, URL safety, queue deduplication, same-origin boundaries and queue persistence.
 
 ## Manual API checks
 
@@ -98,8 +100,8 @@ Stop the local service with \`docker compose down\` from \`firefox/search-engine
 
 ## Roadmap for a genuinely independent engine
 
-1. Add sitemap ingestion and a persistent crawl queue; safe, explicitly approved redirect handling is now implemented.
-2. Expand the index format with language, structured data, canonicalization, duplicate detection and freshness.
+1. Add sitemap ingestion and a persistent, bounded crawl queue; safe, explicitly approved redirect handling is implemented.
+2. Expand the index format with language, structured data, canonicalization, stronger duplicate detection and freshness.
 3. Calibrate ranking with link authority, freshness, language detection and quality signals.
 4. Add separate first-party product and media indexes, including permission-aware image indexing.
 5. Operate a larger crawler with domain budgets, abuse detection, monitoring and enough storage/compute.
