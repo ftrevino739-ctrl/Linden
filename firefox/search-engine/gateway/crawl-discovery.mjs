@@ -103,7 +103,12 @@ export function takeNextCrawlItem(state) {
 
 export function markCrawlVisited(state, value) {
   const url = normalizeCrawlUrl(value);
-  if (!url || state._seen.has(url)) return false;
+  if (!url) return false;
+  if (state._queued.has(url)) {
+    state._queued.delete(url);
+    state.queue = state.queue.filter(item => item.url !== url);
+  }
+  if (state._seen.has(url)) return false;
   state._seen.add(url);
   state.seen.push(url);
   if (state.seen.length > 50000) {
