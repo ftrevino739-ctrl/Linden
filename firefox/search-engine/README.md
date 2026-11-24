@@ -27,7 +27,7 @@ The crawler is \`gateway/crawler.mjs\`. It currently:
 - Uses a per-domain delay of at least 1.2 seconds.
 - Restricts discovered links to the exact page host and one link-following level per run.
 - Rejects non-HTTPS destinations, private IPs, unapproved host redirects, oversized pages, and common login/cart/search paths.
-- Allows a small, explicit set of host-to-host redirect aliases from `gateway/redirect-hosts.txt`; every redirect hop is checked separately, DNS/public-IP validation is repeated, and the destination's `robots.txt` policy is checked before the redirected page is fetched.
+- Allows a small, explicit set of host-to-host redirect aliases from `gateway/redirect-hosts.txt`, including the current `www.mozilla.org` → `www.firefox.com` transition; every redirect hop is checked separately, DNS/public-IP validation is repeated, and the destination's `robots.txt` policy is checked before the redirected page is fetched.
 - Stores title, description, extracted text, canonical URL and a small set of same-host images.
 - Skips pages marked \`noindex\`.
 - Saves its index into a persistent Docker volume, so it survives container rebuilds.
