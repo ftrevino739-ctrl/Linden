@@ -306,6 +306,7 @@ async function discoverSitemaps(origin, policy, redirectRules, queueState, scope
   ];
   const pending = [...new Set(candidates)];
   const visitedSitemaps = new Set();
+  const allowedSitemapOrigins = new Set([origin]);
   let filesRead = 0;
   let pagesDiscovered = 0;
   const maxFiles = 12;
@@ -313,8 +314,10 @@ async function discoverSitemaps(origin, policy, redirectRules, queueState, scope
 
   while (pending.length && filesRead < maxFiles && pagesDiscovered < maxPages) {
     const candidate = pending.shift();
-    const sitemapUrl = sameOriginUrl(candidate, origin);
-    if (!sitemapUrl || visitedSitemaps.has(sitemapUrl)) continue;
+    const sitemapUrl = normalizeCrawlUrl(candidate);
+    if (!sitemapUrl) continue;
+    const candidateOrigin = new URL(sitemapUrl).origin;
+    if (!allowedSitemapOrigins.has(candidateOrigin) || visitedSitemaps.has(sitemapUrl)) continue;
     visitedSitemaps.add(sitemapUrl);
 
     const parsed = new URL(sitemapUrl);
@@ -338,6 +341,7 @@ async function discoverSitemaps(origin, policy, redirectRules, queueState, scope
       if (!/<(?:urlset|sitemapindex)\b/i.test(response.text)) continue;
 
       const finalOrigin = new URL(response.url).origin;
+      allowedSitemapOrigins.add(finalOrigin);
       scopes.set(new URL(response.url).hostname.toLowerCase(), finalOrigin);
       const finalPolicy = await getRobots(finalOrigin, redirectRules);
       const locations = parseSitemapLocations(response.text, response.url, 5000);
