@@ -3,10 +3,12 @@ import path from 'node:path';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { parseRedirectRules, resolveSafeRedirect } from './crawl-safety.mjs';
+import { createCrawlState, enqueueCrawlUrl, markCrawlVisited, normalizeCrawlUrl, parseSitemapLocations, takeNextCrawlItem } from './crawl-discovery.mjs';
 
 const INDEX_PATH = process.env.LINDEN_INDEX_PATH || '/data/index.json';
 const SEEDS_PATH = process.env.LINDEN_SEEDS_PATH || '/app/seeds.txt';
 const REDIRECTS_PATH = process.env.LINDEN_REDIRECTS_PATH || '/app/redirect-hosts.txt';
+const QUEUE_PATH = process.env.LINDEN_QUEUE_PATH || '/data/crawl-queue.json';
 const USER_AGENT = 'LindenBot/0.1';
 const MAX_PAGES = Math.max(1, Math.min(100, Number(process.env.LINDEN_CRAWL_MAX_PAGES || 25)));
 const MAX_BYTES = 1_500_000;
@@ -123,6 +125,7 @@ async function fetchLimited(input, {
 
 function parseRobots(text) {
   const groups = [];
+  const sitemaps = [];
   let group = null;
   for (const raw of String(text || '').split(/\r?\n/)) {
     const line = raw.split('#')[0].trim();
@@ -130,7 +133,9 @@ function parseRobots(text) {
     const colon = line.indexOf(':');
     const key = line.slice(0, colon).trim().toLowerCase();
     const value = line.slice(colon + 1).trim();
-    if (key === 'user-agent') {
+    if (key === 'sitemap') {
+      if (value) sitemaps.push(value);
+    } else if (key === 'user-agent') {
       if (!group || group.hasRules) {
         group = { agents: [], rules: [] };
         groups.push(group);
@@ -146,20 +151,21 @@ function parseRobots(text) {
   const selected = exact.length ? exact : wildcard;
   return {
     rules: selected.flatMap(g => g.rules.filter(r => r.key === 'allow' || r.key === 'disallow')),
-    delay: Math.max(DELAY_MS, ...selected.flatMap(g => g.rules.filter(r => r.key === 'crawl-delay').map(r => Number(r.value) * 1000 || 0)))
+    delay: Math.max(DELAY_MS, ...selected.flatMap(g => g.rules.filter(r => r.key === 'crawl-delay').map(r => Number(r.value) * 1000 || 0))),
+    sitemaps: [...new Set(sitemaps)]
   };
 }
 
 async function getRobots(origin, redirectRules = new Map()) {
   if (robotsCache.has(origin)) return robotsCache.get(origin);
-  let policy = { rules: [], delay: DELAY_MS };
+  let policy = { rules: [], delay: DELAY_MS, sitemaps: [] };
   try {
     const response = await fetchLimited(new URL('/robots.txt', origin).href, { maxBytes: 250000, timeout: 8000, redirectRules });
     if (response.contentType.includes('text') || response.text.trim()) policy = parseRobots(response.text);
   } catch (error) {
     if (!String(error).includes('HTTP 404') && !String(error).includes('HTTP 410')) {
       console.warn('No se pudo leer robots.txt; se omite el dominio:', origin, String(error));
-      policy = { rules: [{ key: 'disallow', value: '/' }], delay: DELAY_MS };
+      policy = { rules: [{ key: 'disallow', value: '/' }], delay: DELAY_MS, sitemaps: [] };
     }
   }
   robotsCache.set(origin, policy);
@@ -253,6 +259,125 @@ async function readRedirectRules() {
   }
 }
 
+async function loadQueueState(index) {
+  let saved = {};
+  try {
+    saved = JSON.parse(await fs.readFile(QUEUE_PATH, 'utf8'));
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn('No se pudo leer la cola persistente; se reconstruirá desde el índice:', String(error));
+    }
+  }
+  const state = createCrawlState(saved);
+  for (const doc of index.documents || []) {
+    if (doc.url) markCrawlVisited(state, doc.url);
+  }
+  return state;
+}
+
+async function saveQueueState(state) {
+  await fs.mkdir(path.dirname(QUEUE_PATH), { recursive: true });
+  state.updatedAt = new Date().toISOString();
+  const temp = QUEUE_PATH + '.tmp';
+  await fs.writeFile(temp, JSON.stringify({
+    version: 1,
+    updatedAt: state.updatedAt,
+    queue: state.queue,
+    seen: state.seen
+  }), 'utf8');
+  await fs.rename(temp, QUEUE_PATH);
+}
+
+function sameOriginUrl(value, origin) {
+  const normalized = normalizeCrawlUrl(value);
+  if (!normalized) return '';
+  try {
+    return new URL(normalized).origin === origin ? normalized : '';
+  } catch {
+    return '';
+  }
+}
+
+async function discoverSitemaps(origin, policy, redirectRules, queueState, scopes) {
+  const candidates = [
+    ...policy.sitemaps,
+    new URL('/sitemap.xml', origin).href,
+    new URL('/sitemap_index.xml', origin).href
+  ];
+  const pending = [...new Set(candidates)];
+  const visitedSitemaps = new Set();
+  let filesRead = 0;
+  let pagesDiscovered = 0;
+  const maxFiles = 12;
+  const maxPages = 10000;
+
+  while (pending.length && filesRead < maxFiles && pagesDiscovered < maxPages) {
+    const candidate = pending.shift();
+    const sitemapUrl = sameOriginUrl(candidate, origin);
+    if (!sitemapUrl || visitedSitemaps.has(sitemapUrl)) continue;
+    visitedSitemaps.add(sitemapUrl);
+
+    const parsed = new URL(sitemapUrl);
+    const sitemapPolicy = await getRobots(parsed.origin, redirectRules);
+    if (!allowedByRobots(parsed, sitemapPolicy)) continue;
+
+    try {
+      await waitForHost(parsed.hostname, sitemapPolicy.delay);
+      const response = await fetchLimited(sitemapUrl, {
+        maxBytes: 5_000_000,
+        timeout: 12000,
+        redirectRules,
+        onRedirect: async (target) => {
+          const targetPolicy = await getRobots(target.origin, redirectRules);
+          if (!allowedByRobots(target, targetPolicy)) {
+            throw new Error('El sitemap de destino está bloqueado por robots.txt.');
+          }
+        }
+      });
+      filesRead++;
+      if (!/<(?:urlset|sitemapindex)\b/i.test(response.text)) continue;
+
+      const finalOrigin = new URL(response.url).origin;
+      scopes.set(new URL(response.url).hostname.toLowerCase(), finalOrigin);
+      const finalPolicy = await getRobots(finalOrigin, redirectRules);
+      const locations = parseSitemapLocations(response.text, response.url, 5000);
+      const isIndex = /<sitemapindex\b/i.test(response.text);
+
+      for (const location of locations) {
+        let target;
+        try { target = new URL(location); } catch { continue; }
+        if (target.origin !== finalOrigin) continue;
+
+        if (isIndex) {
+          if (!visitedSitemaps.has(target.href) && pending.length < maxFiles * 2) {
+            pending.push(target.href);
+          }
+          continue;
+        }
+
+        if (!allowedByRobots(target, finalPolicy)) continue;
+        if (enqueueCrawlUrl(queueState, {
+          url: target.href,
+          origin: finalOrigin,
+          depth: 0,
+          source: 'sitemap'
+        })) {
+          pagesDiscovered++;
+        }
+        if (pagesDiscovered >= maxPages) break;
+      }
+    } catch (error) {
+      console.warn('No se pudo leer sitemap:', sitemapUrl, String(error));
+    }
+  }
+
+  console.log('Sitemap discovery:', JSON.stringify({
+    origin,
+    filesRead,
+    pagesDiscovered
+  }));
+}
+
 async function readSeeds() {
   const text = await fs.readFile(SEEDS_PATH, 'utf8');
   return text.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
@@ -261,35 +386,57 @@ async function readSeeds() {
 async function crawl() {
   const seeds = await readSeeds();
   const redirectRules = await readRedirectRules();
-  const queue = [];
+  const index = await loadIndex();
+  const queueState = await loadQueueState(index);
   const scopes = new Map();
+  const seedOrigins = new Set();
+
   for (const seed of seeds) {
     try {
       const url = new URL(seed);
       await assertPublicHttps(url);
       scopes.set(url.hostname.toLowerCase(), url.origin);
-      queue.push({ url: url.href, depth: 0, origin: url.origin });
+      seedOrigins.add(url.origin);
+      enqueueCrawlUrl(queueState, {
+        url: url.href,
+        origin: url.origin,
+        depth: 0,
+        source: 'seed'
+      });
     } catch (error) {
       console.warn('Semilla omitida:', seed, String(error));
     }
   }
 
-  const visited = new Set();
-  const index = await loadIndex();
-  const byUrl = new Map(index.documents.map(doc => [doc.url, doc]));
-  let indexed = 0, denied = 0, failed = 0;
+  // Discover new URLs from robots.txt Sitemap directives and conventional
+  // sitemap locations even when the seed page itself is already indexed.
+  for (const origin of seedOrigins) {
+    const policy = await getRobots(origin, redirectRules);
+    await discoverSitemaps(origin, policy, redirectRules, queueState, scopes);
+  }
 
-  while (queue.length && visited.size < MAX_PAGES) {
-    const item = queue.shift();
+  const byUrl = new Map(index.documents.map(doc => [doc.url, doc]));
+  let visited = 0, indexed = 0, denied = 0, failed = 0;
+  const retryLater = [];
+
+  while (queueState.queue.length && visited < MAX_PAGES) {
+    const item = takeNextCrawlItem(queueState);
+    if (!item) break;
+    if (queueState.seen.includes(item.url)) continue;
+
     let url;
     try { url = new URL(item.url); } catch { continue; }
-    if (visited.has(url.href)) continue;
-    visited.add(url.href);
-    if (SKIP_EXT.test(url.pathname) || SKIP_PATH.test(url.pathname)) continue;
+    visited++;
+
+    if (SKIP_EXT.test(url.pathname) || SKIP_PATH.test(url.pathname)) {
+      markCrawlVisited(queueState, item.url);
+      continue;
+    }
 
     const policy = await getRobots(item.origin, redirectRules);
     if (!allowedByRobots(url, policy)) {
       denied++;
+      markCrawlVisited(queueState, item.url);
       continue;
     }
 
@@ -305,13 +452,24 @@ async function crawl() {
           }
         }
       });
+
+      markCrawlVisited(queueState, item.url);
+      markCrawlVisited(queueState, page.url);
       if (!/text\/html|application\/xhtml\+xml/i.test(page.contentType)) continue;
+
       const pageOrigin = new URL(page.url).origin;
       scopes.set(new URL(page.url).hostname.toLowerCase(), pageOrigin);
+      const pagePolicy = await getRobots(pageOrigin, redirectRules);
+      if (!seedOrigins.has(pageOrigin)) {
+        seedOrigins.add(pageOrigin);
+        await discoverSitemaps(pageOrigin, pagePolicy, redirectRules, queueState, scopes);
+      }
+
       const data = extractPage(page.text, page.url);
       if (!data.noindex && data.content.length > 80) {
         const canonical = new URL(data.canonical);
-        if (canonical.protocol === 'https:' && canonical.hostname.toLowerCase() === new URL(page.url).hostname.toLowerCase()) {
+        if (canonical.protocol === 'https:' &&
+            canonical.hostname.toLowerCase() === new URL(page.url).hostname.toLowerCase()) {
           byUrl.set(canonical.href, {
             url: canonical.href,
             title: data.title,
@@ -320,15 +478,22 @@ async function crawl() {
             images: data.images,
             crawledAt: new Date().toISOString()
           });
+          markCrawlVisited(queueState, canonical.href);
           indexed++;
         }
       }
+
       if (item.depth < 1) {
         for (const link of data.links) {
           const target = new URL(link);
           const scope = scopes.get(target.hostname.toLowerCase());
-          if (scope && target.origin === scope && !visited.has(target.href) && queue.length < MAX_PAGES * 4) {
-            queue.push({ url: target.href, depth: item.depth + 1, origin: pageOrigin });
+          if (scope && target.origin === scope) {
+            enqueueCrawlUrl(queueState, {
+              url: target.href,
+              origin: pageOrigin,
+              depth: item.depth + 1,
+              source: 'link'
+            });
           }
         }
       }
@@ -336,20 +501,38 @@ async function crawl() {
     } catch (error) {
       failed++;
       console.warn('No se pudo rastrear:', url.href, String(error));
+      if (item.attempts < 1) retryLater.push({ ...item, attempts: item.attempts + 1 });
+      else markCrawlVisited(queueState, item.url);
     }
   }
 
+  // Failed network fetches remain pending for the next crawler run instead of
+  // being silently discarded or retried repeatedly in the same run.
+  for (const item of retryLater) enqueueCrawlUrl(queueState, item, { maxQueue: 50000, maxDepth: 1 });
+
   index.documents = [...byUrl.values()].slice(-10000);
   index.updatedAt = new Date().toISOString();
-  index.crawl = { visited: visited.size, indexed, denied, failed, maxPages: MAX_PAGES };
+  index.crawl = {
+    visited,
+    indexed,
+    denied,
+    failed,
+    maxPages: MAX_PAGES,
+    pending: queueState.queue.length
+  };
   await saveIndex(index);
+  await saveQueueState(queueState);
+
   console.log(JSON.stringify({
-    visited: visited.size,
+    visited,
     indexed,
     deniedByRobots: denied,
     failed,
+    pendingQueue: queueState.queue.length,
+    rememberedUrls: queueState.seen.length,
     totalDocuments: index.documents.length,
-    indexPath: INDEX_PATH
+    indexPath: INDEX_PATH,
+    queuePath: QUEUE_PATH
   }, null, 2));
 }
 
