@@ -49,6 +49,7 @@ export function parseSitemapLocations(xml, baseUrl, limit = 5000) {
 }
 
 function makeState(saved = {}) {
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) saved = {};
   const seen = Array.isArray(saved.seen)
     ? [...new Set(saved.seen.map(normalizeCrawlUrl).filter(Boolean))].slice(-50000)
     : [];
