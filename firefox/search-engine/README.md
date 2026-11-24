@@ -100,7 +100,7 @@ Stop the local service with \`docker compose down\` from \`firefox/search-engine
 
 ## Roadmap for a genuinely independent engine
 
-1. Add sitemap ingestion and a persistent, bounded crawl queue; safe, explicitly approved redirect handling is implemented.
+1. Add compressed sitemap support, scheduled recrawling and crawl freshness policies.
 2. Expand the index format with language, structured data, canonicalization, stronger duplicate detection and freshness.
 3. Calibrate ranking with link authority, freshness, language detection and quality signals.
 4. Add separate first-party product and media indexes, including permission-aware image indexing.
