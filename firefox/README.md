@@ -14,7 +14,7 @@ Linden is being built as a Firefox-based browser distribution. The browser engin
 
 Read [the search-engine setup](search-engine/README.md). Its architecture now includes a first-party crawler and persistent local index, alongside a self-hosted SearXNG service that aggregates independent Brave/Wikimedia sources. Google and Bing are excluded from the SearXNG engine allow-list.
 
-The crawler is a first milestone, not a world-scale index. It starts from a small set of Mozilla/MDN pages, respects robots.txt, is limited to 25 pages per manual run, and stores extracted text and some same-host images in a Docker volume. Broad web discovery still uses the independent upstream index.
+The crawler is a first milestone, not a world-scale index. It starts from a small set of Mozilla/MDN pages, respects robots.txt, discovers additional URLs from bounded XML sitemaps, and persists a capped crawl queue and local index in a Docker volume. Each manual run processes up to 25 pages by default. Broad web discovery still uses the independent upstream index.
 
 ### Windows setup
 
