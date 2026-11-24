@@ -66,6 +66,7 @@ async function getJson(url, options = {}, timeoutMs = 12000) {
 
 
 const INDEX_PATH = process.env.LINDEN_INDEX_PATH || '/data/index.json';
+const QUEUE_PATH = process.env.LINDEN_QUEUE_PATH || '/data/crawl-queue.json';
 
 async function searchLocalIndex(query, { imagesOnly = false } = {}) {
   let documents = [];
@@ -107,6 +108,10 @@ async function indexStats() {
   try {
     const stored = JSON.parse(await fs.readFile(INDEX_PATH, 'utf8'));
     const documents = Array.isArray(stored.documents) ? stored.documents : [];
+    let queue = { pending: [], seen: [], updatedAt: null };
+    try {
+      queue = JSON.parse(await fs.readFile(QUEUE_PATH, 'utf8'));
+    } catch {}
     return {
       name: 'Linden Index',
       documents: documents.length,
@@ -114,10 +119,22 @@ async function indexStats() {
         try { return new URL(doc.url).hostname; } catch { return ''; }
       }).filter(Boolean)).size,
       updatedAt: stored.updatedAt || null,
-      lastCrawl: stored.crawl || null
+      lastCrawl: stored.crawl || null,
+      pendingQueue: Array.isArray(queue.queue) ? queue.queue.length : 0,
+      rememberedUrls: Array.isArray(queue.seen) ? queue.seen.length : 0,
+      queueUpdatedAt: queue.updatedAt || null
     };
   } catch {
-    return { name: 'Linden Index', documents: 0, domains: 0, updatedAt: null, lastCrawl: null };
+    return {
+      name: 'Linden Index',
+      documents: 0,
+      domains: 0,
+      updatedAt: null,
+      lastCrawl: null,
+      pendingQueue: 0,
+      rememberedUrls: 0,
+      queueUpdatedAt: null
+    };
   }
 }
 
@@ -311,7 +328,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://127.0.0.1:' + PORT);
   try {
     if (req.method !== 'GET') return send(req, res, 405, { error: 'Método no permitido.' });
-    if (url.pathname === '/health') return send(req, res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.3.0' });
+    if (url.pathname === '/health') return send(req, res, 200, { ok: true, name: 'Linden Search Gateway', version: '0.4.0' });
     if (url.pathname === '/api/index/stats') return send(req, res, 200, await indexStats());
 
     const q = cleanQuery(url.searchParams.get('q'));
