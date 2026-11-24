@@ -9,6 +9,7 @@ import {
 const rules = parseRedirectRules(`
 # Explicit trusted aliases only
 www.mozilla.org mozilla.org
+www.mozilla.org www.firefox.com
 mozilla.org www.mozilla.org
 www.wikipedia.org wikipedia.org
 www.wikipedia.org en.wikipedia.org
@@ -25,6 +26,8 @@ test('same-host HTTPS redirects remain allowed without extra rules', () => {
 
 test('explicit host aliases allow legitimate redirects', () => {
   assert.equal(isRedirectHostAllowed('www.mozilla.org', 'mozilla.org', rules), true);
+  assert.equal(isRedirectHostAllowed('www.mozilla.org', 'www.firefox.com', rules), true);
+  assert.equal(isRedirectHostAllowed('www.firefox.com', 'www.mozilla.org', rules), false);
   const target = resolveSafeRedirect(
     'https://www.wikipedia.org/',
     'https://en.wikipedia.org/wiki/Main_Page',
