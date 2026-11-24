@@ -2,9 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { parseRedirectRules, resolveSafeRedirect } from './crawl-safety.mjs';
 
 const INDEX_PATH = process.env.LINDEN_INDEX_PATH || '/data/index.json';
 const SEEDS_PATH = process.env.LINDEN_SEEDS_PATH || '/app/seeds.txt';
+const REDIRECTS_PATH = process.env.LINDEN_REDIRECTS_PATH || '/app/redirect-hosts.txt';
 const USER_AGENT = 'LindenBot/0.1';
 const MAX_PAGES = Math.max(1, Math.min(100, Number(process.env.LINDEN_CRAWL_MAX_PAGES || 25)));
 const MAX_BYTES = 1_500_000;
@@ -66,14 +68,15 @@ async function assertPublicHttps(url) {
   }
 }
 
-async function fetchLimited(input, { maxBytes = MAX_BYTES, timeout = 15000, sameHost = true } = {}) {
+async function fetchLimited(input, {
+  maxBytes = MAX_BYTES,
+  timeout = 15000,
+  redirectRules = new Map(),
+  onRedirect = null
+} = {}) {
   let current = new URL(input);
-  const originalHost = current.hostname.toLowerCase();
   for (let redirects = 0; redirects <= 4; redirects++) {
     await assertPublicHttps(current);
-    if (sameHost && current.hostname.toLowerCase() !== originalHost) {
-      throw new Error('Se rechazó una redirección fuera del dominio inicial.');
-    }
     const response = await fetch(current, {
       redirect: 'manual',
       signal: AbortSignal.timeout(timeout),
@@ -85,7 +88,10 @@ async function fetchLimited(input, { maxBytes = MAX_BYTES, timeout = 15000, same
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       if (!location) throw new Error('Redirección sin destino.');
-      current = new URL(location, current);
+      const target = resolveSafeRedirect(current, location, redirectRules);
+      await assertPublicHttps(target);
+      if (onRedirect) await onRedirect(target);
+      current = target;
       continue;
     }
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -144,11 +150,11 @@ function parseRobots(text) {
   };
 }
 
-async function getRobots(origin) {
+async function getRobots(origin, redirectRules = new Map()) {
   if (robotsCache.has(origin)) return robotsCache.get(origin);
   let policy = { rules: [], delay: DELAY_MS };
   try {
-    const response = await fetchLimited(new URL('/robots.txt', origin).href, { maxBytes: 250000, timeout: 8000 });
+    const response = await fetchLimited(new URL('/robots.txt', origin).href, { maxBytes: 250000, timeout: 8000, redirectRules });
     if (response.contentType.includes('text') || response.text.trim()) policy = parseRobots(response.text);
   } catch (error) {
     if (!String(error).includes('HTTP 404') && !String(error).includes('HTTP 410')) {
@@ -238,6 +244,15 @@ async function saveIndex(index) {
   await fs.rename(temp, INDEX_PATH);
 }
 
+async function readRedirectRules() {
+  try {
+    return parseRedirectRules(await fs.readFile(REDIRECTS_PATH, 'utf8'));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return new Map();
+    throw error;
+  }
+}
+
 async function readSeeds() {
   const text = await fs.readFile(SEEDS_PATH, 'utf8');
   return text.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
@@ -245,6 +260,7 @@ async function readSeeds() {
 
 async function crawl() {
   const seeds = await readSeeds();
+  const redirectRules = await readRedirectRules();
   const queue = [];
   const scopes = new Map();
   for (const seed of seeds) {
@@ -271,7 +287,7 @@ async function crawl() {
     visited.add(url.href);
     if (SKIP_EXT.test(url.pathname) || SKIP_PATH.test(url.pathname)) continue;
 
-    const policy = await getRobots(item.origin);
+    const policy = await getRobots(item.origin, redirectRules);
     if (!allowedByRobots(url, policy)) {
       denied++;
       continue;
@@ -279,12 +295,23 @@ async function crawl() {
 
     try {
       await waitForHost(url.hostname, policy.delay);
-      const page = await fetchLimited(url.href, { maxBytes: MAX_BYTES });
+      const page = await fetchLimited(url.href, {
+        maxBytes: MAX_BYTES,
+        redirectRules,
+        onRedirect: async (target) => {
+          const targetPolicy = await getRobots(target.origin, redirectRules);
+          if (!allowedByRobots(target, targetPolicy)) {
+            throw new Error('La ruta de destino está bloqueada por robots.txt.');
+          }
+        }
+      });
       if (!/text\/html|application\/xhtml\+xml/i.test(page.contentType)) continue;
+      const pageOrigin = new URL(page.url).origin;
+      scopes.set(new URL(page.url).hostname.toLowerCase(), pageOrigin);
       const data = extractPage(page.text, page.url);
       if (!data.noindex && data.content.length > 80) {
         const canonical = new URL(data.canonical);
-        if (canonical.protocol === 'https:' && canonical.hostname.toLowerCase() === url.hostname.toLowerCase()) {
+        if (canonical.protocol === 'https:' && canonical.hostname.toLowerCase() === new URL(page.url).hostname.toLowerCase()) {
           byUrl.set(canonical.href, {
             url: canonical.href,
             title: data.title,
@@ -301,7 +328,7 @@ async function crawl() {
           const target = new URL(link);
           const scope = scopes.get(target.hostname.toLowerCase());
           if (scope && target.origin === scope && !visited.has(target.href) && queue.length < MAX_PAGES * 4) {
-            queue.push({ url: target.href, depth: item.depth + 1, origin: item.origin });
+            queue.push({ url: target.href, depth: item.depth + 1, origin: pageOrigin });
           }
         }
       }
