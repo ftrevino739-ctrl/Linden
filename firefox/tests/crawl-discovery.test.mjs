@@ -41,7 +41,7 @@ test('rejects non-HTTPS, credentials, nonstandard ports and malformed entries', 
     <url><loc>http://docs.example.org/no</loc></url>
     <url><loc>https://user:pass@docs.example.org/no</loc></url>
     <url><loc>https://docs.example.org:8443/no</loc></url>
-    <url><loc>not a URL</loc></url>
+    <url><loc>https://[invalid-host/</loc></url>
   </urlset>`;
   assert.deepEqual(parseSitemapLocations(xml, 'https://docs.example.org/sitemap.xml'), []);
   assert.equal(normalizeCrawlUrl('http://docs.example.org/'), '');
@@ -93,4 +93,11 @@ test('queue only accepts URLs within their declared origin scope', () => {
     origin: 'https://docs.example.org',
     depth: 2
   }), false);
+});
+
+
+test('malformed persisted state resets safely', () => {
+  const state = createCrawlState(null);
+  assert.deepEqual(state.queue, []);
+  assert.deepEqual(state.seen, []);
 });
