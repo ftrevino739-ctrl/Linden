@@ -288,16 +288,6 @@ async function saveQueueState(state) {
   await fs.rename(temp, QUEUE_PATH);
 }
 
-function sameOriginUrl(value, origin) {
-  const normalized = normalizeCrawlUrl(value);
-  if (!normalized) return '';
-  try {
-    return new URL(normalized).origin === origin ? normalized : '';
-  } catch {
-    return '';
-  }
-}
-
 async function discoverSitemaps(origin, policy, redirectRules, queueState, scopes) {
   const candidates = [
     ...policy.sitemaps,
