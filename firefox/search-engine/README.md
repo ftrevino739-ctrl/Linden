@@ -25,8 +25,9 @@ The crawler is \`gateway/crawler.mjs\`. It currently:
 - Starts with HTTPS URLs from \`gateway/seeds.txt\`.
 - Checks the domain's \`robots.txt\` and honors matching Allow/Disallow rules.
 - Uses a per-domain delay of at least 1.2 seconds.
-- Restricts links to the exact seeded domain/origin and one link-following level per run.
-- Rejects non-HTTPS destinations, private IPs, off-domain redirects, oversized pages, and common login/cart/search paths.
+- Restricts discovered links to the exact page host and one link-following level per run.
+- Rejects non-HTTPS destinations, private IPs, unapproved host redirects, oversized pages, and common login/cart/search paths.
+- Allows a small, explicit set of host-to-host redirect aliases from `gateway/redirect-hosts.txt`; every redirect hop is checked separately, DNS/public-IP validation is repeated, and the destination's `robots.txt` policy is checked before the redirected page is fetched.
 - Stores title, description, extracted text, canonical URL and a small set of same-host images.
 - Skips pages marked \`noindex\`.
 - Saves its index into a persistent Docker volume, so it survives container rebuilds.
@@ -69,9 +70,9 @@ To change seed sites, edit \`gateway/seeds.txt\`, then run the crawl command aga
 
 Reload the extension in Firefox at \`about:debugging#/runtime/this-firefox\`, then open a new tab and search. General web and image results can include pages already present in Linden Index.
 
-## Search ranking regression tests
+## Automated regression tests
 
-From the repository root, run `node --test firefox/tests/search-ranking.test.mjs` to verify title relevance, whole-token matching, accent normalization, image-label matching, empty indexes and duplicate canonical URLs.
+From the repository root, run `node --test firefox/tests/search-ranking.test.mjs` to verify title relevance, whole-token matching, accent normalization, image-label matching, empty indexes and duplicate canonical URLs. Run `node --test firefox/tests/crawler-safety.test.mjs` to verify that same-host and explicitly approved redirects work while unlisted hosts, HTTPS downgrades, credentials and nonstandard ports are rejected.
 
 ## Manual API checks
 
@@ -97,7 +98,7 @@ Stop the local service with \`docker compose down\` from \`firefox/search-engine
 
 ## Roadmap for a genuinely independent engine
 
-1. Add sitemap ingestion and a persistent crawl queue.
+1. Add sitemap ingestion and a persistent crawl queue; safe, explicitly approved redirect handling is now implemented.
 2. Expand the index format with language, structured data, canonicalization, duplicate detection and freshness.
 3. Calibrate ranking with link authority, freshness, language detection and quality signals.
 4. Add separate first-party product and media indexes, including permission-aware image indexing.
