@@ -1,6 +1,7 @@
 # Reglas explícitas de host origen -> host destino para redirecciones legítimas.
 # No se permiten comodines. Cada salto se valida por separado.
 www.mozilla.org mozilla.org
+www.mozilla.org www.firefox.com
 mozilla.org www.mozilla.org
 www.wikipedia.org wikipedia.org
 wikipedia.org www.wikipedia.org
